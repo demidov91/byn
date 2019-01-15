@@ -4,4 +4,4 @@ COPY celery /celery
 WORKDIR /celery
 RUN pip install requirements.txt
 
-CMD ["python", "-m", "launch.py"]
+CMD flower & celery -A launch worker

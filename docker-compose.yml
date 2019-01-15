@@ -8,12 +8,19 @@ services:
       - ./app/:/app/:ro
 
   redis:
-    image: "redis:5-alpine"
+    image: "redis:5-alpine3.8"
+    ports:
+      - "6379:6379"
 
   celery:
-    image: "python3.7-alpine"
+    image: "python:3.7-alpine"
+    ports:
+      - "5555:5555" # flower
     volumes:
-      - ./app/celery/:/app/celery/:ro
+      - ./celery/:/celery/:ro
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
 
   cassandra_1:
     image: "cassandra:3.11"
