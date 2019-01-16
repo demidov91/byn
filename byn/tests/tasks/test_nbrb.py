@@ -1,10 +1,10 @@
 from decimal import Decimal
 from unittest import mock
 
-from tasks import nbrb
+from byn.tasks import nbrb
 
 
-@mock.patch('tasks.nbrb.insert_nbrb_rates')
+@mock.patch('byn.tasks.nbrb.insert_nbrb_rates')
 def test_nbrb_to_cassandra(patched):
     source = [
         {"Date": "2015-11-02", "cur": "USD", "rate": "1.7421"},

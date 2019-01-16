@@ -13,9 +13,9 @@ from typing import Collection, Tuple
 import requests
 from sklearn.neighbors import KNeighborsRegressor
 
-import constants as const
-from tasks.launch import app
-from cassandra_db import (
+import byn.constants as const
+from byn.tasks.launch import app
+from byn.cassandra_db import (
     get_last_nbrb_rates,
     get_last_nbrb_local_rates,
     get_last_nbrb_global_record,
