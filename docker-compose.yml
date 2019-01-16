@@ -1,11 +1,17 @@
 version: '3'
 services:
   python:
-    image: "python:3.7"
+    build:
+      context: .
+      dockerfile: "./app.Dockerfile"
+    image: "dzmitry/byn-app"
     ports:
       - "5000:5000"
     volumes:
       - ./app/:/app/:ro
+    environment:
+      - CASSANDRA_HOSTS=${CASSANDRA_HOSTS:-cassandra_1,cassandra_2}
+      - CASSANDRA_PORT=${CASSANDRA_PORT}
 
   redis:
     image: "redis:5-alpine3.8"
@@ -13,7 +19,10 @@ services:
       - "6379:6379"
 
   celery:
-    image: "python:3.7-alpine"
+    build:
+      context: .
+      dockerfile: "./celery.Dockerfile"
+    image: "dzmitry/byn-celery"
     ports:
       - "5555:5555" # flower
     volumes:
@@ -21,6 +30,8 @@ services:
     environment:
       - CELERY_BROKER_URL=${CELERY_BROKER_URL}
       - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - CASSANDRA_HOSTS=${CASSANDRA_HOSTS:-cassandra_1,cassandra_2}
+      - CASSANDRA_PORT=${CASSANDRA_PORT}
 
   cassandra_1:
     image: "cassandra:3.11"

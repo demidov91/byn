@@ -1,11 +1,12 @@
 from celery import Celery
 
 app = Celery(
+    'byn.tasks.launch',
     include=[
-        'bcse',
-        'external_rates',
-        'nbrb',
-        'produce_predict',
+        'byn.tasks.bcse',
+        'byn.tasks.external_rates',
+        'byn.tasks.nbrb',
+        'byn.tasks.produce_predict',
     ]
 )
 

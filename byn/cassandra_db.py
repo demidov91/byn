@@ -1,22 +1,61 @@
 import logging
 import os
+import threading
 from decimal import Decimal
 from typing import Collection, Iterable
 
+from celery.signals import worker_process_init, worker_process_shutdown
+
 from cassandra.cluster import Cluster, NoHostAvailable
+from cassandra.policies import WhiteListRoundRobinPolicy
 
 
 logger = logging.getLogger(__name__)
 
+CASSANDRA_HOSTS = os.environ['CASSANDRA_HOSTS'].split(',')
+thread_local = threading.local()
 
-try:
-    cluster = Cluster(['cassandra_1', 'cassandra_2'], port=os.environ['CASSANDRA_PORT'])
-    db = cluster.connect()
-    db.execute("CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 2}")
-    db.execute('USE byn')
-except NoHostAvailable:
-    logger.exception('Couldnt connect to cassandra')
-    cluster = db = None
+
+def create_cassandra_session():
+    try:
+        cluster = Cluster(
+            CASSANDRA_HOSTS,
+            port=os.environ['CASSANDRA_PORT'],
+            load_balancing_policy=WhiteListRoundRobinPolicy(hosts=CASSANDRA_HOSTS)
+        )
+        db = cluster.connect()
+        db.execute(
+            "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 2}")
+        db.execute('USE byn')
+    except NoHostAvailable:
+        logger.exception('Couldnt connect to cassandra')
+        return None
+
+    return db
+
+class PerThreadCassandraSession:
+    def set_thread_session(self, session):
+        thread_local.cassandra_session = session
+
+    def __getattr__(self, item):
+        return getattr(thread_local.cassandra_session, item)
+
+    def __setattr__(self, key, value):
+        return setattr(thread_local.cassandra_session, key, value)
+
+
+db = PerThreadCassandraSession()
+
+
+@worker_process_init.connect
+def _init_cassandra_session(**kwargs):
+    db.set_thread_session(create_cassandra_session())
+
+
+@worker_process_shutdown.connect
+def _shutdown_cassandra_session(**kwargs):
+    db.shutdown()
+
 
 
 def get_last_nbrb_rates():
@@ -79,6 +118,10 @@ def add_nbrb_global(data):
 
 def insert_trade_dates(trade_dates: Collection[str]):
     rs = []
+
+    # from celery.contrib import rdb
+    # rdb.set_trace()
+
     for row in trade_dates:
         rs.append(
             db.execute_async('INSERT into trade_date (dummy, date) VALUES (true, %s) ', (row, ))

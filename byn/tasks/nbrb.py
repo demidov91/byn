@@ -8,9 +8,10 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
-from typing import Collection, Tuple
+from typing import Collection, Tuple, Iterable
 
 import requests
+import celery
 from sklearn.neighbors import KNeighborsRegressor
 
 import byn.constants as const
@@ -43,6 +44,26 @@ CURR_IDS = {
 }
 
 TRADE_DATES_URL = 'https://banki24.by/exchange/allowed?code=USD'
+
+
+@app.task
+def update_nbrb_rates_async():
+    return (
+        load_trade_dates.si() |
+        extract_nbrb.s() |
+        celery.group(
+            load_nbrb_local.si(),
+            load_dxy_12MSK.si()
+        ) |
+        load_nbrb_global.si()
+    )()
+
+
+@app.task
+def load_trade_dates():
+    dates = client.get(TRADE_DATES_URL).json()
+    insert_trade_dates(dates)
+    return dates[-50:]
 
 
 @app.task
@@ -80,17 +101,13 @@ def extract_nbrb(last_trade_dates: Collection[str]):
 
 
 @app.task
-def update_trade_dates():
-    dates = client.get(TRADE_DATES_URL).json()
-    insert_trade_dates(dates)
-    return dates[-50:]
-
-
-@app.task
-def load_dxy_12MSK():
+def load_dxy_12MSK() -> Tuple[Iterable]:
     record = get_last_nbrb_global_record()
     date = record and record.date.date()
     dates = [x.date.date() for x in get_nbrb_gt(date)]
+
+    if len(dates) == 0:
+        return ()
 
     TRADE_ID = 11
     RESOLUTION = 60 * 4
@@ -104,8 +121,6 @@ def load_dxy_12MSK():
                f'resolution={RESOLUTION}&' \
                f'from={start_timestamp}&' \
                f'to={end_timestamp}'
-
-    print(data_url)
 
     raw_data = client.get(data_url).json(parse_float=Decimal)
 
