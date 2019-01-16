@@ -5,7 +5,7 @@ from tasks import nbrb
 
 
 @mock.patch('tasks.nbrb.insert_nbrb_rates')
-def test_rates_to_cassandra(patched):
+def test_nbrb_to_cassandra(patched):
     source = [
         {"Date": "2015-11-02", "cur": "USD", "rate": "1.7421"},
         {"Date": "2015-11-03", "cur": "USD", "rate": "1.7447"},
@@ -17,7 +17,7 @@ def test_rates_to_cassandra(patched):
         {"Date": "2015-11-03", "cur": "UAH", "rate": "7.561"},
     ]
 
-    nbrb.rates_to_cassandra(source)
+    nbrb.nbrb_to_cassandra(source)
 
     patched.assert_called_once_with((
         {
