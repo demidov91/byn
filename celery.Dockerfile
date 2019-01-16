@@ -1,7 +1,7 @@
 FROM python:3.7-alpine
 
-COPY celery /celery
-WORKDIR /celery
-RUN pip install requirements.txt
+COPY app /app
+WORKDIR /app
+RUN pip install requirements/celery.txt
 
 CMD flower & celery -A launch worker

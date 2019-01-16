@@ -1,0 +1,2 @@
+-r celery.in
+pytest

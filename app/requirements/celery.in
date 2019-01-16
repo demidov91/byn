@@ -1,4 +1,5 @@
--r ../app/requirements.in
+-r ../app.in
 -e git+https://github.com/celery/celery@cd6c7444cadbdaaccca14a986e7e1b3330c33024#egg=celery
 flower
 redis
+requests
