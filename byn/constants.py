@@ -6,3 +6,4 @@ EXTERNAL_RATE_DATA = 'data/forexpf-%s.json'
 
 BACKUP_BUCKET = 'byn-dzmitry-by-backup'
 NBRB_BACKUP_PATH = '/tmp/nbrb.backup.csv.gz'
+EXTERNAL_RATE_BACKUP_PATH = '/tmp/external_rates.csv.gz'

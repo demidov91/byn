@@ -3,10 +3,17 @@ import datetime
 import gzip
 
 import boto3
+from celery import group
 
+from byn import constants as const
 from byn.cassandra_db import db
 from byn.tasks.launch import app
-from byn import constants as const
+
+
+@app.task
+def backup_async():
+    group([backup_nbrb_async.si(), backup_external_rates_async.si()])()
+
 
 @app.task
 def backup_nbrb_async():
@@ -35,3 +42,26 @@ def _send_backup_nbrb_to_s3():
     filename = f'nbrb_{datetime.date.today():%Y-%m-%d}.csv.gz'
     s3 = boto3.client('s3')
     s3.upload_file(const.NBRB_BACKUP_PATH, const.BACKUP_BUCKET, filename)
+
+
+@app.task
+def _create_backup_external_rates():
+    data = db.execute(
+        f'SELECT currency, datetime, open, close, low, high, volume from external_rate'
+    )
+    with gzip.open(const.EXTERNAL_RATE_BACKUP_PATH, mode='wt') as f:
+        writer = csv.writer(f, delimiter=';')
+        writer.writerow(('currency', 'datetime', 'open', 'close', 'low', 'high', 'volume'))
+        writer.writerows([tuple(x) for x in data])
+
+
+@app.task
+def _send_backup_external_rates_to_s3():
+    filename = f'external_rates_{datetime.date.today():%Y-%m-%d}.csv.gz'
+    s3 = boto3.client('s3')
+    s3.upload_file(const.EXTERNAL_RATE_BACKUP_PATH, const.BACKUP_BUCKET, filename)
+
+
+@app.task
+def backup_external_rates_async():
+    (_create_backup_external_rates.si() | _send_backup_external_rates_to_s3.si())()

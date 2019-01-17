@@ -65,7 +65,7 @@ def update_one_currency_async(currency: str):
 
 @app.task
 def update_all_currencies_async():
-    group([update_one_currency_async.si(x) for x in ('EUR', 'RUB', 'UAH', 'DXY')])()
+    group([update_one_currency_async.si(x) for x in forexpf.CURRENCY_CODES.keys()])()
 
 
 def extend_dump_by_forexpf_file(currency, file_path):
