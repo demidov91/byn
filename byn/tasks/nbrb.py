@@ -15,6 +15,7 @@ import celery
 from sklearn.neighbors import KNeighborsRegressor
 
 import byn.constants as const
+from byn import forexpf
 from byn.tasks.launch import app
 from byn.cassandra_db import (
     get_last_nbrb_rates,
@@ -109,20 +110,15 @@ def load_dxy_12MSK() -> Tuple[Iterable]:
     if len(dates) == 0:
         return ()
 
-    TRADE_ID = 11
-    RESOLUTION = 60 * 4
     start_date = dates[-1]
-    start_timestamp = int(datetime.datetime.fromordinal(start_date.toordinal()).timestamp())
     end_date = dates[0] + datetime.timedelta(days=1)
-    end_timestamp = int(datetime.datetime.fromordinal(end_date.toordinal()).timestamp())
 
-    data_url = f'https://charts.forexpf.ru/html/tw/history?' \
-               f'symbol={TRADE_ID}&' \
-               f'resolution={RESOLUTION}&' \
-               f'from={start_timestamp}&' \
-               f'to={end_timestamp}'
-
-    raw_data = client.get(data_url).json(parse_float=Decimal)
+    raw_data = forexpf.get_data(
+        currency='DXY',
+        resolution=60*4,
+        start_dt=datetime.datetime.fromordinal(start_date.toordinal()),
+        end_dt=datetime.datetime.fromordinal(end_date.toordinal())
+    )
 
     dxy_regressor = KNeighborsRegressor(n_neighbors=2).fit(
         [[x] for x in raw_data['t']],

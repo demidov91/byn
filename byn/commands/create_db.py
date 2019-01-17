@@ -1,4 +1,4 @@
-from cassandra_db import db
+from byn.cassandra_db import db
 
 
 def run():
@@ -38,6 +38,18 @@ def run():
                'date date, '
                'PRIMARY KEY (dummy, date)'               
                ') WITH CLUSTERING ORDER BY (date DESC)')
+
+    db.execute('CREATE TABLE external_rate('               
+               'currency string, '
+               'year int, '
+               'datetime timestamp, '
+               'open decimal , '
+               'close decimal , '
+               'low decimal, '
+               'high decimal, '
+               'volume int, '
+               'PRIMARY KEY ((currency, year), datetime)'
+               ') WITH CLUSTERING ORDER BY (datetime DESC)')
 
     # db.execute('CREATE INDEX date')
 

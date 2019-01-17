@@ -1,8 +1,9 @@
+import datetime
 import logging
 import os
 import threading
 from decimal import Decimal
-from typing import Collection, Iterable
+from typing import Collection, Iterable, Union, Tuple, Iterator
 
 from celery.signals import worker_process_init, worker_process_shutdown
 
@@ -47,7 +48,7 @@ class PerThreadCassandraSession:
         self.shutdown()
 
 
-db = PerThreadCassandraSession() # type: Session
+db = PerThreadCassandraSession() # type: Union[Session, PerThreadCassandraSession]
 db.connect()
 
 
@@ -73,6 +74,17 @@ def get_last_nbrb_global_record():
 
 def get_last_nbrb_global_with_rates():
     return next(iter(db.execute('select * from nbrb_global where dummy=true and byn>0 limit 1 ALLOW FILTERING')), None)
+
+def get_last_external_currency_datetime(currency: str) -> datetime.datetime:
+    current_year = datetime.date.today().year
+
+    return max((
+        x[0].datetime() for x in db.execute(
+            'select datetime from external_rate where currency=%s and year in (%s, %s) per partition limit 1',
+            (currency, current_year, current_year - 1)
+        )
+    ), default=datetime.datetime.fromtimestamp(0))
+
 
 def get_nbrb_gt(date):
     return db.execute('select * from nbrb where dummy=true and date>%s', (date or 0, ))
@@ -158,6 +170,34 @@ def insert_dxy_12MSK(data: Iterable[Collection]):
     rs = []
     for date, dxy in data:
         db.execute_async('INSERT into nbrb_global (dummy, date, dxy) VALUES (true, %s, %s)', (date, dxy))
+    # Call for exception.
+    for r in rs:
+        r.result()
+
+
+def insert_external_rates(
+        currency: str,
+        data: Iterator[
+            Tuple[
+                datetime.datetime,
+                Decimal,
+                Decimal,
+                Decimal,
+                Decimal,
+                int
+            ]
+        ]
+):
+    rs = []
+    for row in data:
+        rs.append(
+            db.execute_async(
+                'INSERT into external_rate (year, currency, datetime, open, close, low, high, volume) '
+                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+                (row[0].year, currency, row[0], row[1], row[2], row[3], row[4], row[5])
+            )
+        )
+
     # Call for exception.
     for r in rs:
         r.result()
