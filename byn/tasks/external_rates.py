@@ -22,7 +22,6 @@ client = Session()
 
 @app.task
 def extract_one_currency(start_dt: datetime.datetime, currency: str):
-
     end_dt = datetime.datetime.now()
     data_to_store = []
 
@@ -39,7 +38,7 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
 
         data_to_store.extend(data)
 
-        last_time = datetime.datetime.fromtimestamp(data[0]['time'])
+        last_time = datetime.datetime.fromtimestamp(data[0][0])
 
     with open(const.EXTERNAL_RATE_DATA % currency, mode='wt') as f:
         json.dump(data_to_store, f)
@@ -66,7 +65,7 @@ def update_one_currency_async(currency: str):
 
 @app.task
 def update_all_currencies_async():
-    group([update_one_currency_async(x) for x in ('EUR', 'RUB', 'UAH', 'DXY')])()
+    group([update_one_currency_async.si(x) for x in ('EUR', 'RUB', 'UAH', 'DXY')])()
 
 
 def extend_dump_by_forexpf_file(currency, file_path):
