@@ -4,3 +4,4 @@ flower
 redis
 requests
 scikit-learn
+boto3

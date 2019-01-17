@@ -6,7 +6,7 @@ from typing import Collection, Iterable
 
 from celery.signals import worker_process_init, worker_process_shutdown
 
-from cassandra.cluster import Cluster, NoHostAvailable
+from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 
@@ -34,27 +34,31 @@ def create_cassandra_session():
     return db
 
 class PerThreadCassandraSession:
-    def set_thread_session(self, session):
-        thread_local.cassandra_session = session
-
     def __getattr__(self, item):
         return getattr(thread_local.cassandra_session, item)
 
     def __setattr__(self, key, value):
         return setattr(thread_local.cassandra_session, key, value)
 
+    def connect(self):
+        thread_local.cassandra_session = create_cassandra_session()
 
-db = PerThreadCassandraSession()
+    def disconnect(self):
+        self.shutdown()
+
+
+db = PerThreadCassandraSession() # type: Session
+db.connect()
 
 
 @worker_process_init.connect
 def _init_cassandra_session(**kwargs):
-    db.set_thread_session(create_cassandra_session())
+    db.connect()
 
 
 @worker_process_shutdown.connect
 def _shutdown_cassandra_session(**kwargs):
-    db.shutdown()
+    db.disconnect()
 
 
 
