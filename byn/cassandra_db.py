@@ -79,7 +79,7 @@ def get_last_external_currency_datetime(currency: str) -> datetime.datetime:
     current_year = datetime.date.today().year
 
     return max((
-        x[0].datetime() for x in db.execute(
+        x[0] for x in db.execute(
             'select datetime from external_rate where currency=%s and year in (%s, %s) per partition limit 1',
             (currency, current_year, current_year - 1)
         )

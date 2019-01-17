@@ -40,7 +40,7 @@ def run():
                ') WITH CLUSTERING ORDER BY (date DESC)')
 
     db.execute('CREATE TABLE external_rate('               
-               'currency string, '
+               'currency varchar, '
                'year int, '
                'datetime timestamp, '
                'open decimal , '

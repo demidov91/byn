@@ -33,15 +33,11 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
         if last_time <= start_dt:
             break
 
-        data = forexpf.get_forexpf_rows(
+        data = forexpf.get_forexpf_tuples(
             currency=currency, resolution=resolution, start_dt=start_dt, end_dt=last_time
         )
 
-        for row in data:
-            for rate_key in ('open', 'close', 'low', 'high'):
-                row[rate_key] = str(row[rate_key])
-
-        data_to_store.extend([tuple(x.values()) for x in data])
+        data_to_store.extend(data)
 
         last_time = datetime.datetime.fromtimestamp(data[0]['time'])
 
@@ -54,12 +50,10 @@ def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
         data = json.load(f, parse_float=Decimal)
 
-    _load_one_currency_data(currency, data)
-
-
-def _load_one_currency_data(currency, data):
     for row in data:
         row[0] = datetime.datetime.fromtimestamp(row[0])
+        for i in (1, 2, 3, 4):
+            row[i] = Decimal(row[i])
 
     insert_external_rates(currency, data)
 
@@ -75,7 +69,6 @@ def update_all_currencies_async():
     group([update_one_currency_async(x) for x in ('EUR', 'RUB', 'UAH', 'DXY')])()
 
 
-
 def extend_dump_by_forexpf_file(currency, file_path):
     """
     Helper method to create an initial dump.
@@ -86,11 +79,11 @@ def extend_dump_by_forexpf_file(currency, file_path):
     with open(file_path, mode='rt') as f:
         raw_new_data = json.load(f)
 
-    last_timestamp = min(x[0] for x in existing_data)
+    last_timestamp = min((x[0] for x in existing_data), default=10**10)
 
     new_data = [
-        x for x in forexpf.forexpf_data_into_rows(raw_new_data)
-        if x['time'] < last_timestamp
+        x for x in forexpf.forexpf_data_into_tuples(raw_new_data)
+        if x[0] < last_timestamp
     ]
 
     existing_data.extend(new_data)

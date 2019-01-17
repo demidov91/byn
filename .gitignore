@@ -3,4 +3,5 @@
 __pycache__
 celerybeat-schedule
 
-app/data/
+data/
+
