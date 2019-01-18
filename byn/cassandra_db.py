@@ -2,13 +2,15 @@ import datetime
 import logging
 import os
 import threading
+from dataclasses import asdict
 from decimal import Decimal
 from typing import Collection, Iterable, Union, Tuple, Iterator
 
 from celery.signals import worker_process_init, worker_process_shutdown
-
 from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
+
+from byn.datatypes import ExternalRateData
 
 
 logger = logging.getLogger(__name__)
@@ -201,3 +203,16 @@ def insert_external_rates(
     # Call for exception.
     for r in rs:
         r.result()
+
+
+def insert_external_rate_live(row: ExternalRateData):
+    data = asdict(row)
+    data['timestamp_open'] *= 1000
+    data['timestamp_received'] = int(data['timestamp_received'] * 1000)
+
+    db.execute(
+        'INSERT into external_rate_live (currency, timestamp_open, volume, timestamp_received, close) '
+        'VALUES (%(currency)s, %(timestamp_open)s, %(volume)s, %(timestamp_received)s, %(close)s) '
+        'USING TTL 15811200', # Half a year.
+        data
+    )

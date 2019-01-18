@@ -1,4 +1,4 @@
-from cassandra_db import db
+from byn.cassandra_db import db
 
 
 def run(*table_names: str):

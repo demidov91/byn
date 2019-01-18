@@ -39,7 +39,7 @@ def run():
                'PRIMARY KEY (dummy, date)'               
                ') WITH CLUSTERING ORDER BY (date DESC)')
 
-    db.execute('CREATE TABLE external_rate('               
+    db.execute('CREATE TABLE IF NOT EXISTS external_rate('               
                'currency varchar, '
                'year int, '
                'datetime timestamp, '
@@ -50,6 +50,15 @@ def run():
                'volume int, '
                'PRIMARY KEY ((currency, year), datetime)'
                ') WITH CLUSTERING ORDER BY (datetime DESC)')
+
+    db.execute('CREATE TABLE external_rate_live('
+               'currency varchar, '
+               'timestamp_open timestamp, '
+               'volume int, '
+               'timestamp_received timestamp, '               
+               'close varchar , '
+               'PRIMARY KEY (currency, timestamp_open, volume)'
+               ') WITH CLUSTERING ORDER BY (timestamp_open DESC, volume DESC)')
 
     # db.execute('CREATE INDEX date')
 

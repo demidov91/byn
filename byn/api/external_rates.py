@@ -1,17 +1,23 @@
 """
 profinance.ru (forexpf) long poll ===> redis cache & cassandra
 """
+import asyncio
 import logging
+import dataclasses
+import datetime
+from asyncio.queues import Queue
 
 from aiohttp.client import ClientSession
 
 from byn import constants as const
+from byn.cassandra_db import insert_external_rate_live
+from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
 
 
 logger = logging.getLogger(__name__)
-
 CURRENCIES_TO_LISTEN = 'EUR', 'RUB', 'UAH', 'DXY'
+forexpf_code_to_currency = {y: x for x, y in CURRENCY_CODES.items()}
 
 
 async def listen_forexpf():
@@ -50,21 +56,50 @@ async def listen_forexpf():
                 else:
                     logger.error("Couldn't subscribe to %s", currency)
 
-        async for line in long_poll_response.content:
-            logger.debug(line)
+        queue = Queue()
+        asyncio.ensure_future(_worker(queue))
+        await _producer(long_poll_response, queue)
 
-            data = sse_to_tuple(line)
 
-            if data is None:
-                continue
+async def _producer(long_poll_response, queue: Queue):
+    async for line in long_poll_response.content:
+        logger.debug(line)
 
-            try:
-                _, product_id, resolution, data_column, rate_open, high, low, close, volume = data
-            except ValueError:
-                logger.exception("Couldn't split an event:\n%s", data)
-                continue
+        data = sse_to_tuple(line)
 
-            logger.debug(
-                'product: %s, column: %s, open: %s, close: %s, low: %s, high: %s, volume: %s',
-                product_id, data_column, rate_open, close, low, high, volume
-            )
+        if data is None:
+            continue
+
+        try:
+            _, product_id, resolution, timestamp_open, rate_open, high, low, close, volume = data
+        except ValueError:
+            logger.exception("Couldn't split an event:\n%s", data)
+            continue
+
+        try:
+            await queue.put(ExternalRateData(
+                currency=forexpf_code_to_currency[int(product_id)],
+                timestamp_open=int(timestamp_open),
+                rate_open=rate_open,
+                close=close,
+                low=low,
+                high=high,
+                volume=int(volume),
+                timestamp_received=datetime.datetime.now().timestamp(),
+            ))
+        except ValueError:
+            logger.exception("Error while sending external rate data into queue.")
+            continue
+
+
+async def _worker(queue: Queue):
+    while True:
+        data = await queue.get()
+        logger.debug(data)
+        try:
+            insert_external_rate_live(data)
+        except asyncio.CancelledError:
+            break
+        except:
+            logger.exception("External rate record wasn't saved into db.")
+            continue
