@@ -1,6 +1,7 @@
 import csv
 import datetime
 import gzip
+from typing import Tuple
 
 import boto3
 from celery import group
@@ -13,6 +14,10 @@ from byn.tasks.launch import app
 @app.task
 def backup_async():
     group([backup_nbrb_async.si(), backup_external_rates_async.si()])()
+
+
+######################
+######################
 
 
 @app.task
@@ -44,24 +49,47 @@ def _send_backup_nbrb_to_s3():
     s3.upload_file(const.NBRB_BACKUP_PATH, const.BACKUP_BUCKET, filename)
 
 
-@app.task
-def _create_backup_external_rates():
-    data = db.execute(
-        f'SELECT currency, datetime, open, close, low, high, volume from external_rate'
-    )
-    with gzip.open(const.EXTERNAL_RATE_BACKUP_PATH, mode='wt') as f:
-        writer = csv.writer(f, delimiter=';')
-        writer.writerow(('currency', 'datetime', 'open', 'close', 'low', 'high', 'volume'))
-        writer.writerows([tuple(x) for x in data])
+########################################
+########################################
 
 
-@app.task
-def _send_backup_external_rates_to_s3():
-    filename = f'external_rates_{datetime.date.today():%Y-%m-%d}.csv.gz'
-    s3 = boto3.client('s3')
-    s3.upload_file(const.EXTERNAL_RATE_BACKUP_PATH, const.BACKUP_BUCKET, filename)
+CASSANDRA_BACKUP_TABLES = (
+    (
+        'external_rate',
+        ('currency', 'datetime', 'open', 'close', 'low', 'high', 'volume')
+    ),
+    (
+        'external_rate_live',
+        ('currency', 'timestamp_open', 'volume', 'timestamp_received', 'close', 'writetime(close)', 'ttl(close)')
+    ),
+)
 
 
 @app.task
 def backup_external_rates_async():
-    (_create_backup_external_rates.si() | _send_backup_external_rates_to_s3.si())()
+    group([
+        _create_cassandra_table_backup.si(*args) | _send_cassandra_table_backup_to_s3.si(args[0])
+        for args in CASSANDRA_BACKUP_TABLES
+    ])()
+
+
+@app.task
+def _create_cassandra_table_backup(table: str, columns: Tuple[str]):
+    data = db.execute(f'SELECT {", ".join(columns)} from {table}')
+    with gzip.open(f'/tmp/{table}.csv', mode='wt') as f:
+        writer = csv.writer(f, delimiter=';')
+        writer.writerow(columns)
+        writer.writerows([tuple(x) for x in data])
+
+
+@app.task
+def _send_cassandra_table_backup_to_s3(table: str):
+    s3 = boto3.client('s3')
+    s3.upload_file(
+        f'/tmp/{table}.csv',
+        const.BACKUP_BUCKET,
+        f'{table}_{datetime.date.today():%Y-%m-%d}.csv.gz'
+    )
+
+
+

@@ -6,7 +6,5 @@ EXTERNAL_RATE_DATA = 'data/forexpf-%s.json'
 
 BACKUP_BUCKET = 'byn-dzmitry-by-backup'
 NBRB_BACKUP_PATH = '/tmp/nbrb.backup.csv.gz'
-EXTERNAL_RATE_BACKUP_PATH = '/tmp/external_rates.csv.gz'
-
 
 FOREXPF_LONG_POLL_SSE = 'https://charts.profinance.ru/html/tw/sse'
