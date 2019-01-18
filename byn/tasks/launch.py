@@ -1,6 +1,9 @@
 from celery import Celery
 from celery.schedules import crontab
 
+# Initialize logging configurations.
+import byn.logging
+
 app = Celery(
     'byn.tasks.launch',
     include=[

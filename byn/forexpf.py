@@ -1,11 +1,12 @@
 import datetime
+import logging
 from collections import OrderedDict
 from decimal import Decimal
-from typing import Sequence
+from typing import Sequence, Optional, List
 
 import requests
 
-
+logger = logging.getLogger(__name__)
 client = requests.Session()
 
 
@@ -77,7 +78,29 @@ def get_forexpf_dicts(
     return forexpf_data_into_dicts(get_data(*args, **kwargs))
 
 
-
-
 def get_forexpf_tuples(*args, **kwargs):
     return forexpf_dicts_to_tuples(get_forexpf_dicts(*args, **kwargs))
+
+
+def sse_to_tuple(line: bytes) -> Optional[List[str]]:
+    line = line.strip()
+    if not line:
+        return None
+
+    try:
+        line = line.decode()
+    except:
+        logger.error("Can't decode a message: %s", line)
+        return None
+
+    if not line.startswith('data: '):
+        logger.warning('Unrecognized message: %s', line)
+        return None
+
+    line = line[6:]
+
+    if line == '0':
+        return None
+
+    return line.split(';')
+
