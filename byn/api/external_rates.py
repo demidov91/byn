@@ -5,8 +5,10 @@ import asyncio
 import logging
 import dataclasses
 import datetime
+import os
 from asyncio.queues import Queue
 
+import aioredis
 from aiohttp.client import ClientSession
 
 from byn import constants as const
@@ -57,7 +59,7 @@ async def listen_forexpf():
                     logger.error("Couldn't subscribe to %s", currency)
 
         queue = Queue()
-        asyncio.ensure_future(_worker(queue))
+        asyncio.create_task(_worker(queue))
         await _producer(long_poll_response, queue)
 
 
@@ -93,13 +95,35 @@ async def _producer(long_poll_response, queue: Queue):
 
 
 async def _worker(queue: Queue):
-    while True:
-        data = await queue.get()
+    keep_running = True
+    redis_client = await aioredis.create_redis(
+        f'redis://{os.environ["REDIS_CACHE_HOST"]}',
+        db=const.REDIS_CACHE_DB
+    )
+
+    while keep_running:
+        data = await queue.get()    # type: ExternalRateData
         logger.debug(data)
         try:
             insert_external_rate_live(data)
         except asyncio.CancelledError:
-            break
+            keep_running = False
+
         except:
-            logger.exception("External rate record wasn't saved into db.")
-            continue
+            logger.exception("External rate record wasn't saved into cassandra.")
+
+        try:
+            await redis_client.mset(
+                data.currency, data.close,
+                f'{data.currency}_timestamp', int(data.timestamp_received * 1000)
+            )
+        except asyncio.CancelledError:
+            keep_running = False
+
+        except:
+            logger.exception("External rate record wasn't saved into redis cache.")
+
+
+
+
+
