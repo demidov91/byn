@@ -104,6 +104,8 @@ async def _producer(long_poll_response, queue: Queue):
             logger.exception("Error while sending external rate data into queue.")
             continue
 
+        _inspect_queue(queue)
+
 
 @always_on_coroutine
 async def _worker(queue: Queue):
@@ -157,3 +159,23 @@ def _forexpf_works(current_dt: datetime.datetime) -> bool:
 def _get_time_to_monday(current_dt: datetime.datetime) -> float:
     next_monday = current_dt.date() + datetime.timedelta(days=8 - current_dt.isoweekday())
     return (datetime.datetime.fromordinal(next_monday.toordinal()) - current_dt).total_seconds()
+
+
+def _inspect_queue(queue: Queue):
+    """
+    Log queue size.
+    """
+    queue_size = queue.qsize()
+    if queue_size < 2:
+        return
+
+    if queue_size > 15:
+        logging_level = logging.ERROR
+    elif queue_size > 10:
+        logging_level = logging.WARNING
+    elif queue_size > 5:
+        logging_level = logging.INFO
+    else:
+        logging_level = logging.DEBUG
+
+    logger.log(logging_level, 'External rates queue size: %s', queue_size)
