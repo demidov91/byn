@@ -3,7 +3,6 @@ profinance.ru (forexpf) long poll ===> redis cache & cassandra
 """
 import asyncio
 import logging
-import dataclasses
 import datetime
 import os
 from asyncio.queues import Queue
@@ -12,9 +11,10 @@ import aioredis
 from aiohttp.client import ClientSession
 
 from byn import constants as const
-from byn.cassandra_db import insert_external_rate_live
+from byn.cassandra_db import insert_external_rate_live_async
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
+from byn.utils import always_on_coroutine
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,15 @@ CURRENCIES_TO_LISTEN = 'EUR', 'RUB', 'UAH', 'DXY'
 forexpf_code_to_currency = {y: x for x, y in CURRENCY_CODES.items()}
 
 
+@always_on_coroutine
 async def listen_forexpf():
+    current_dt = datetime.datetime.now()
+
+    if not _forexpf_works(current_dt):
+        wait_for = _get_time_to_monday(current_dt)
+        logger.info('Gonna wait for %s seconds for forexpf to start.', wait_for)
+        await asyncio.sleep(wait_for)
+
     async with ClientSession() as client:
         long_poll_response = await client.get(const.FOREXPF_LONG_POLL_SSE)
 
@@ -59,10 +67,13 @@ async def listen_forexpf():
                     logger.error("Couldn't subscribe to %s", currency)
 
         queue = Queue()
-        asyncio.create_task(_worker(queue))
+        for _ in range(const.FOREXPF_WORKERS_COUNT):
+            asyncio.create_task(_worker(queue))
+
         await _producer(long_poll_response, queue)
 
 
+@always_on_coroutine
 async def _producer(long_poll_response, queue: Queue):
     async for line in long_poll_response.content:
         logger.debug(line)
@@ -94,6 +105,7 @@ async def _producer(long_poll_response, queue: Queue):
             continue
 
 
+@always_on_coroutine
 async def _worker(queue: Queue):
     keep_running = True
     redis_client = await aioredis.create_redis(
@@ -104,14 +116,18 @@ async def _worker(queue: Queue):
     while keep_running:
         data = await queue.get()    # type: ExternalRateData
         logger.debug(data)
+
+        # Send to cassandra.
+        async_result = None
         try:
-            insert_external_rate_live(data)
+            async_result = insert_external_rate_live_async(data)
         except asyncio.CancelledError:
             keep_running = False
 
         except:
-            logger.exception("External rate record wasn't saved into cassandra.")
+            logger.exception("External rate record wasn't sent into cassandra.")
 
+        # Save in redis.
         try:
             await redis_client.mset(
                 data.currency, data.close,
@@ -123,7 +139,21 @@ async def _worker(queue: Queue):
         except:
             logger.exception("External rate record wasn't saved into redis cache.")
 
+        # Check cassandra result.
+        try:
+            if async_result is not None:
+                async_result.result()
+        except asyncio.CancelledError:
+            keep_running = False
+
+        except:
+            logger.exception("External rate record wasn't saved in cassandra.")
 
 
+def _forexpf_works(current_dt: datetime.datetime) -> bool:
+    return current_dt.isoweekday() not in (6, 7)
 
 
+def _get_time_to_monday(current_dt: datetime.datetime) -> float:
+    next_monday = current_dt.date() + datetime.timedelta(days=8 - current_dt.isoweekday())
+    return (datetime.datetime.fromordinal(next_monday.toordinal()) - current_dt).total_seconds()

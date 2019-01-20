@@ -205,12 +205,12 @@ def insert_external_rates(
         r.result()
 
 
-def insert_external_rate_live(row: ExternalRateData):
+def insert_external_rate_live_async(row: ExternalRateData):
     data = asdict(row)
     data['timestamp_open'] *= 1000
     data['timestamp_received'] = int(data['timestamp_received'] * 1000)
 
-    db.execute(
+    return db.execute_async(
         'INSERT into external_rate_live (currency, timestamp_open, volume, timestamp_received, close) '
         'VALUES (%(currency)s, %(timestamp_open)s, %(volume)s, %(timestamp_received)s, %(close)s) '
         'USING TTL 15811200', # Half a year.

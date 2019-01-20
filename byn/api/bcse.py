@@ -9,6 +9,7 @@ import logging
 from aiohttp.client import ClientSession
 
 import byn.constants as const
+from byn.utils import always_on_coroutine
 
 
 logger = logging.getLogger(__name__)
@@ -73,8 +74,6 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
         current_dt += datetime.timedelta(days=1)
 
 
-    print(current_dt)
-
     return _get_todays_bcse_start(current_dt.date())
 
 
@@ -101,6 +100,7 @@ def is_holiday(date: datetime.date) -> bool:
     return False
 
 
+@always_on_coroutine
 async def listen_bcse():
     while True:
         current_dt = datetime.datetime.now()
@@ -110,13 +110,6 @@ async def listen_bcse():
             current_dt = datetime.datetime.now()
 
         next_time = _get_open_time(current_dt)
-
-        print(next_time)
-        print(current_dt)
-        print(next_time - current_dt)
-
         wait_for = (next_time - current_dt).total_seconds()
-
         logger.info('BCSE reader gonna sleep for %s', wait_for)
-
         await asyncio.sleep(wait_for)
