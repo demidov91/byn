@@ -10,7 +10,7 @@ from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from byn.datatypes import ExternalRateData
+from byn.datatypes import ExternalRateData, BcseData
 
 
 logger = logging.getLogger(__name__)
@@ -216,3 +216,16 @@ def insert_external_rate_live_async(row: ExternalRateData):
         'USING TTL 15811200', # Half a year.
         data
     )
+
+
+def insert_bcse_async(data: Iterable[BcseData]):
+    rs = []
+
+    for row in data:
+        rs.append(db.execute_async(
+            'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
+            'VALUES (%s, %s, %s, %s)',
+            (row.currency, row.epoch)
+        ))
+
+    return rs

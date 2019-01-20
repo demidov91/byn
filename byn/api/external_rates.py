@@ -4,17 +4,15 @@ profinance.ru (forexpf) long poll ===> redis cache & cassandra
 import asyncio
 import logging
 import datetime
-import os
 from asyncio.queues import Queue
 
-import aioredis
 from aiohttp.client import ClientSession
 
 from byn import constants as const
 from byn.cassandra_db import insert_external_rate_live_async
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
-from byn.utils import always_on_coroutine
+from byn.utils import always_on_coroutine, create_redis
 
 
 logger = logging.getLogger(__name__)
@@ -109,13 +107,9 @@ async def _producer(long_poll_response, queue: Queue):
 
 @always_on_coroutine
 async def _worker(queue: Queue):
-    keep_running = True
-    redis_client = await aioredis.create_redis(
-        f'redis://{os.environ["REDIS_CACHE_HOST"]}',
-        db=const.REDIS_CACHE_DB
-    )
+    redis_client = await create_redis()
 
-    while keep_running:
+    while True:
         data = await queue.get()    # type: ExternalRateData
         logger.debug(data)
 
@@ -123,8 +117,8 @@ async def _worker(queue: Queue):
         async_result = None
         try:
             async_result = insert_external_rate_live_async(data)
-        except asyncio.CancelledError:
-            keep_running = False
+        except asyncio.CancelledError as e:
+            raise e
 
         except:
             logger.exception("External rate record wasn't sent into cassandra.")
@@ -135,8 +129,8 @@ async def _worker(queue: Queue):
                 data.currency, data.close,
                 f'{data.currency}_timestamp', int(data.timestamp_received * 1000)
             )
-        except asyncio.CancelledError:
-            keep_running = False
+        except asyncio.CancelledError as e:
+            raise e
 
         except:
             logger.exception("External rate record wasn't saved into redis cache.")
@@ -145,8 +139,8 @@ async def _worker(queue: Queue):
         try:
             if async_result is not None:
                 async_result.result()
-        except asyncio.CancelledError:
-            keep_running = False
+        except asyncio.CancelledError as e:
+            raise e
 
         except:
             logger.exception("External rate record wasn't saved in cassandra.")

@@ -4,12 +4,18 @@ There is no live api for bcse, so let's try to read it periodically. Once per 15
 """
 import asyncio
 import datetime
+import json
 import logging
+from collections import OrderedDict
+from typing import List, Optional
 
 from aiohttp.client import ClientSession
+from aioredis import Redis
 
 import byn.constants as const
-from byn.utils import always_on_coroutine
+from byn.cassandra_db import insert_bcse_async
+from byn.datatypes import BcseData
+from byn.utils import always_on_coroutine, create_redis
 
 
 logger = logging.getLogger(__name__)
@@ -77,11 +83,84 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
     return _get_todays_bcse_start(current_dt.date())
 
 
+@always_on_coroutine
 async def _listen_to_bcse_till(finish_datetime):
+    today = datetime.date.today()
+    current_records = OrderedDict()
+    is_first_iteration = True
+    redis = await create_redis()
+
     async with ClientSession() as client:
         while datetime.datetime.now() < finish_datetime:
-            print('work')
-            await asyncio.sleep(const.BCSE_UPDATE_INTERVAL)
+            if is_first_iteration:
+                is_first_iteration = False
+            else:
+                await asyncio.sleep(const.BCSE_UPDATE_INTERVAL)
+
+
+            data = await _extract_bcse_rates(client, today)
+            if data is None:
+                continue
+
+            current_ms_timestamp = int(datetime.datetime.now().timestamp() * 1000)
+
+            new_data = [
+                BcseData(
+                    currency='USD',
+                    ms_timestamp_operation=dt,
+                    ms_timestamp_received=current_ms_timestamp,
+                    rate=rate
+                )
+                for dt, rate in data
+                if (dt not in current_records) or (current_records[dt] != rate)
+            ]
+
+            results = insert_bcse_async(new_data)
+            await _publish_bcse_in_redis(redis, data)
+
+            for r in results:
+                try:
+                    r.result()
+                except asyncio.CancelledError as e:
+                    raise e
+                except:
+                    logger.exception("BCSE rate wasn't saved in cassandra.")
+
+            else:
+                current_records.update(new_data)
+
+
+async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Optional[List[List[int, str]]]:
+    try:
+        response = await client.get(
+            f'https://banki24.by/exchange/last/USD/{date.isoformat()}'
+        )
+    except asyncio.CancelledError as e:
+        raise e
+    except:
+        logger.exception('Unexpected exception while extracting bcse rates.')
+        return None
+
+    raw_data = await response.json(parse_float=str)
+    data = next(
+        filter(lambda x: x['color'] == const.BCSE_LAST_OPERATION_COLOR, raw_data),
+        None
+    )
+    if data is None:
+        logger.error('Unexpected bcse data format: %s', raw_data)
+        return None
+
+    return data
+
+
+async def _publish_bcse_in_redis(redis: Redis, data: List[List[int, str]]):
+    try:
+        str_data = json.dumps(data)
+        await redis.set(const.BCSE_REDIS_KEY, str_data)
+    except asyncio.CancelledError as e:
+        raise e
+    except:
+        logger.error("Couldn't publish bcse rates in redis.")
 
 
 def is_holiday(date: datetime.date) -> bool:
@@ -106,7 +185,10 @@ async def listen_bcse():
         current_dt = datetime.datetime.now()
 
         if bcse_is_open(current_dt):
-            await _listen_to_bcse_till(_get_todays_bcse_finish(current_dt.date()))
+            await _listen_to_bcse_till(
+                _get_todays_bcse_finish(current_dt.date()) +
+                datetime.timedelta(minutes=15)
+            )
             current_dt = datetime.datetime.now()
 
         next_time = _get_open_time(current_dt)

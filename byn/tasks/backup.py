@@ -62,6 +62,10 @@ CASSANDRA_BACKUP_TABLES = (
         'external_rate_live',
         ('currency', 'timestamp_open', 'volume', 'timestamp_received', 'close', 'writetime(close)', 'ttl(close)')
     ),
+    (
+        'bcse',
+        ('currency', 'timestamp_operation', 'timestamp_received', 'rate')
+    ),
 )
 
 
