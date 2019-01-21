@@ -13,7 +13,7 @@ from aiohttp.client import ClientSession
 from aioredis import Redis
 
 import byn.constants as const
-from byn.cassandra_db import insert_bcse_async
+from byn.cassandra_db import insert_bcse_async, get_bcse_in
 from byn.datatypes import BcseData
 from byn.utils import always_on_coroutine, create_redis
 
@@ -51,7 +51,7 @@ def _get_todays_bcse_start(date: datetime.date):
 
 
 def _get_todays_bcse_finish(date: datetime.date):
-    return datetime.datetime(date.year, date.month, date.day, 13, 0)
+    return datetime.datetime(date.year, date.month, date.day, 13, 15)
 
 
 def bcse_is_open(current_dt: datetime.datetime) -> bool:
@@ -83,10 +83,21 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
     return _get_todays_bcse_start(current_dt.date())
 
 
+def _build_initial_current_records(today: datetime.date):
+    return OrderedDict((
+        (int(dt.timestamp() * 1000), rate)
+        for dt, rate in get_bcse_in(
+            'USD',
+            _get_todays_bcse_start(today),
+            datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
+        )
+    ))
+
+
 @always_on_coroutine
 async def _listen_to_bcse_till(finish_datetime):
     today = datetime.date.today()
-    current_records = OrderedDict()
+    current_records = _build_initial_current_records(today)
     is_first_iteration = True
     redis = await create_redis()
 
@@ -102,6 +113,7 @@ async def _listen_to_bcse_till(finish_datetime):
             if data is None:
                 continue
 
+            data = [(dt - 60 * 60 * 3 * 1000, rate) for dt, rate in data]
             current_ms_timestamp = int(datetime.datetime.now().timestamp() * 1000)
 
             new_data = [
@@ -158,7 +170,7 @@ async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Opt
     elif not required_raw_data_item['data']:
         logger.debug('Empty bcse data.')
 
-    return required_raw_data_item.get('data', ())
+    return required_raw_data_item.get('data')
 
 
 async def _publish_bcse_in_redis(redis: Redis, data: List[List]):
@@ -193,10 +205,7 @@ async def listen_bcse():
         current_dt = datetime.datetime.now()
 
         if bcse_is_open(current_dt):
-            await _listen_to_bcse_till(
-                _get_todays_bcse_finish(current_dt.date()) +
-                datetime.timedelta(minutes=15)
-            )
+            await _listen_to_bcse_till(_get_todays_bcse_finish(current_dt.date()))
             current_dt = datetime.datetime.now()
 
         next_time = _get_open_time(current_dt)

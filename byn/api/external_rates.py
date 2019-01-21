@@ -6,7 +6,7 @@ import logging
 import datetime
 from asyncio.queues import Queue
 
-from aiohttp.client import ClientSession
+from aiohttp.client import ClientSession, ClientTimeout
 
 from byn import constants as const
 from byn.cassandra_db import insert_external_rate_live_async
@@ -39,7 +39,10 @@ async def listen_forexpf():
 @always_on_coroutine
 async def _producer(queue: Queue):
     async with ClientSession() as long_poll_client:
-        long_poll_response = await long_poll_client.get(const.FOREXPF_LONG_POLL_SSE)
+        long_poll_response = await long_poll_client.get(
+            const.FOREXPF_LONG_POLL_SSE,
+            timeout=ClientTimeout(connect=20)
+        )
 
         session_id = None
 

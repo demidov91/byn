@@ -97,6 +97,21 @@ def get_nbrb_local_gt(date):
 def get_nbrb_global_gt(date):
     return db.execute('select * from nbrb_global where dummy=true and date>%s', (date or 0, ))
 
+def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.datetime=None):
+    end_dt = end_dt or datetime.datetime(2035, 1, 1)
+    start_dt = int(start_dt.timestamp() * 1000)
+    end_dt = int(end_dt.timestamp() * 1000)
+    raw_output = db.execute(
+        'SELECT timestamp_operation, rate FROM bcse '
+        'WHERE currency=%s and timestamp_operation>=%s and timestamp_operation<%s',
+        (currency, start_dt, end_dt)
+    )
+
+    return (
+        (dt.replace(tzinfo=datetime.timezone.utc), rate)
+        for dt, rate in raw_output
+    )
+
 
 def insert_nbrb_local(data):
     rs = []
