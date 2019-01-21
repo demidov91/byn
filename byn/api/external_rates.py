@@ -121,15 +121,8 @@ async def _worker(queue: Queue):
         logger.debug(data)
 
         # Send to cassandra.
-        async_result = None
-        try:
-            async_result = insert_external_rate_live_async(data)
-        except asyncio.CancelledError as e:
-            raise e
-
-        except:
-            logger.exception("External rate record wasn't sent into cassandra.")
-
+        insert_external_rate_live_async(data)
+        
         # Save in redis.
         try:
             await redis_client.mset(
@@ -141,16 +134,6 @@ async def _worker(queue: Queue):
 
         except:
             logger.exception("External rate record wasn't saved into redis cache.")
-
-        # Check cassandra result.
-        try:
-            if async_result is not None:
-                async_result.result()
-        except asyncio.CancelledError as e:
-            raise e
-
-        except:
-            logger.exception("External rate record wasn't saved in cassandra.")
 
 
 def _forexpf_works(current_dt: datetime.datetime) -> bool:

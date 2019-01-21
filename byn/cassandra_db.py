@@ -4,7 +4,7 @@ import os
 import threading
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Collection, Iterable, Union, Tuple, Iterator
+from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict
 
 from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra.cluster import Cluster, NoHostAvailable, Session
@@ -113,83 +113,67 @@ def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.dat
     )
 
 
-def insert_nbrb_local(data):
+def _handle_async_exception(exception: BaseException):
+    logger.exception('Error while executing async cassandra query: %s', exception)
+
+
+def _launch_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, Any]]]):
+    return (db.execute_async(query, row) for row in data)
+
+
+def _execute_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, Any]]]):
     rs = []
     for row in data:
-        rs.append(
-            db.execute_async(
-                'INSERT into nbrb_local '
-                '(dummy, date, usd, eur, rub, uah) '
-                'VALUES '
-                '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
-                row
-            )
-        )
+        rs.append(db.execute_async(query, row))
 
     # Call for exception.
-    for r in rs:
+    for r in _launch_in_parallel(query, data):
         r.result()
 
+
+
+def insert_nbrb_local(data):
+    _execute_in_parallel(
+        'INSERT into nbrb_local '
+        '(dummy, date, usd, eur, rub, uah) '
+        'VALUES '
+        '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
+        data
+    )
 
 
 def add_nbrb_global(data):
-    rs = []
-    for row in data:
-        rs.append(
-            db.execute_async(
-                'UPDATE nbrb_global set '
-                'byn=%(BYN)s, eur=%(EUR)s, rub=%(RUB)s, uah=%(UAH)s '
-                'WHERE dummy=true and date=%(date)s',
-                row
-            )
-        )
-
-    # Call for exception.
-    for r in rs:
-        r.result()
+    _execute_in_parallel(
+        'UPDATE nbrb_global set '
+        'byn=%(BYN)s, eur=%(EUR)s, rub=%(RUB)s, uah=%(UAH)s '
+        'WHERE dummy=true and date=%(date)s',
+        data
+    )
 
 
 def insert_trade_dates(trade_dates: Collection[str]):
-    rs = []
-
-    # from celery.contrib import rdb
-    # rdb.set_trace()
-
-    for row in trade_dates:
-        rs.append(
-            db.execute_async('INSERT into trade_date (dummy, date) VALUES (true, %s) ', (row, ))
-        )
-
-    # Call for exception.
-    for r in rs:
-        r.result()
+    _execute_in_parallel(
+        'INSERT into trade_date (dummy, date) VALUES (true, %s) ',
+        ((x, ) for x in trade_dates)
+    )
 
 
 def insert_nbrb_rates(rates: Iterable[dict]):
-    rs = []
-    for row in rates:
-        rs.append(
-            db.execute_async(
-                'INSERT into nbrb '
-                '(dummy, date, usd, eur, rub, uah) '
-                'VALUES '
-                '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
-                row
-            )
-        )
-
-    # Call for exception.
-    for r in rs:
-        r.result()
+    _execute_in_parallel(
+        'INSERT into nbrb '
+        '(dummy, date, usd, eur, rub, uah) '
+        'VALUES '
+        '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
+        rates
+    )
 
 
-def insert_dxy_12MSK(data: Iterable[Collection]):
-    rs = []
-    for date, dxy in data:
-        db.execute_async('INSERT into nbrb_global (dummy, date, dxy) VALUES (true, %s, %s)', (date, dxy))
-    # Call for exception.
-    for r in rs:
-        r.result()
+def insert_dxy_12MSK(data: Iterable[tuple]):
+    _execute_in_parallel(
+        'INSERT into nbrb_global (dummy, date, dxy) VALUES (true, %s, %s)',
+        data
+    )
+
 
 
 def insert_external_rates(
@@ -205,19 +189,14 @@ def insert_external_rates(
             ]
         ]
 ):
-    rs = []
-    for row in data:
-        rs.append(
-            db.execute_async(
-                'INSERT into external_rate (year, currency, datetime, open, close, low, high, volume) '
-                'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
-                (row[0].year, currency, row[0], row[1], row[2], row[3], row[4], row[5])
-            )
-        )
-
-    # Call for exception.
-    for r in rs:
-        r.result()
+    _execute_in_parallel(
+        'INSERT into external_rate (year, currency, datetime, open, close, low, high, volume) '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+        [
+            (row[0].year, currency, row[0], row[1], row[2], row[3], row[4], row[5])
+            for row in data
+        ]
+    )
 
 
 def insert_external_rate_live_async(row: ExternalRateData):
@@ -230,17 +209,15 @@ def insert_external_rate_live_async(row: ExternalRateData):
         'VALUES (%(currency)s, %(timestamp_open)s, %(volume)s, %(timestamp_received)s, %(close)s) '
         'USING TTL 15811200', # Half a year.
         data
-    )
+    ).add_errback(_handle_async_exception)
 
 
 def insert_bcse_async(data: Iterable[BcseData]):
-    rs = []
-
-    for row in data:
-        rs.append(db.execute_async(
-            'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
-            'VALUES (%s, %s, %s, %s)',
+    return _launch_in_parallel(
+        'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
+        'VALUES (%s, %s, %s, %s)',
+        [
             (row.currency, row.ms_timestamp_operation, row.ms_timestamp_received, row.rate)
-        ))
-
-    return rs
+            for row in data
+        ]
+    )
