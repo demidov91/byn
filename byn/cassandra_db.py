@@ -225,7 +225,7 @@ def insert_bcse_async(data: Iterable[BcseData]):
         rs.append(db.execute_async(
             'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
             'VALUES (%s, %s, %s, %s)',
-            (row.currency, row.epoch)
+            (row.currency, row.ms_timestamp_operation, row.ms_timestamp_received, row.rate)
         ))
 
     return rs

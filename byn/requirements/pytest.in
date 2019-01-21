@@ -1,2 +1,4 @@
 -r celery.in
 pytest
+pytest-asyncio
+ipython     # For local development.

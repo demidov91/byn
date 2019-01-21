@@ -47,7 +47,7 @@ EXTRA_BCSE_WORKDAYS = (
 
 
 def _get_todays_bcse_start(date: datetime.date):
-    return datetime.datetime(date.year, date.month, date.day, 9, 0)
+    return datetime.datetime(date.year, date.month, date.day, 10, 0)
 
 
 def _get_todays_bcse_finish(date: datetime.date):
@@ -115,6 +115,8 @@ async def _listen_to_bcse_till(finish_datetime):
                 if (dt not in current_records) or (current_records[dt] != rate)
             ]
 
+            logger.debug('New bcse data: %s', new_data)
+
             results = insert_bcse_async(new_data)
             await _publish_bcse_in_redis(redis, data)
 
@@ -127,10 +129,10 @@ async def _listen_to_bcse_till(finish_datetime):
                     logger.exception("BCSE rate wasn't saved in cassandra.")
 
             else:
-                current_records.update(new_data)
+                current_records.update([(x.ms_timestamp_operation, x.rate) for x in new_data])
 
 
-async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Optional[List[List[int, str]]]:
+async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Optional[List[List]]:
     try:
         response = await client.get(
             f'https://banki24.by/exchange/last/USD/{date.isoformat()}'
@@ -141,19 +143,25 @@ async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Opt
         logger.exception('Unexpected exception while extracting bcse rates.')
         return None
 
-    raw_data = await response.json(parse_float=str)
-    data = next(
+    raw_data = await response.read()
+    raw_data = json.loads(raw_data.decode(), parse_float=str)
+    required_raw_data_item = next(
         filter(lambda x: x['color'] == const.BCSE_LAST_OPERATION_COLOR, raw_data),
         None
     )
-    if data is None:
+    if required_raw_data_item is None:
         logger.error('Unexpected bcse data format: %s', raw_data)
         return None
 
-    return data
+    if 'data' not in required_raw_data_item:
+        logger.info('No bcse data.')
+    elif not required_raw_data_item['data']:
+        logger.debug('Empty bcse data.')
+
+    return required_raw_data_item.get('data', ())
 
 
-async def _publish_bcse_in_redis(redis: Redis, data: List[List[int, str]]):
+async def _publish_bcse_in_redis(redis: Redis, data: List[List]):
     try:
         str_data = json.dumps(data)
         await redis.set(const.BCSE_REDIS_KEY, str_data)

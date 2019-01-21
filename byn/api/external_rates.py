@@ -29,8 +29,17 @@ async def listen_forexpf():
         logger.info('Gonna wait for %s seconds for forexpf to start.', wait_for)
         await asyncio.sleep(wait_for)
 
-    async with ClientSession() as client:
-        long_poll_response = await client.get(const.FOREXPF_LONG_POLL_SSE)
+    queue = Queue()
+    for _ in range(const.FOREXPF_WORKERS_COUNT):
+        asyncio.create_task(_worker(queue))
+
+    await _producer(queue)
+
+
+@always_on_coroutine
+async def _producer(queue: Queue):
+    async with ClientSession() as long_poll_client:
+        long_poll_response = await long_poll_client.get(const.FOREXPF_LONG_POLL_SSE)
 
         session_id = None
 
@@ -64,15 +73,10 @@ async def listen_forexpf():
                 else:
                     logger.error("Couldn't subscribe to %s", currency)
 
-        queue = Queue()
-        for _ in range(const.FOREXPF_WORKERS_COUNT):
-            asyncio.create_task(_worker(queue))
-
-        await _producer(long_poll_response, queue)
+        await _sse_reader(long_poll_response, queue)
 
 
-@always_on_coroutine
-async def _producer(long_poll_response, queue: Queue):
+async def _sse_reader(long_poll_response, queue: Queue):
     async for line in long_poll_response.content:
         logger.debug(line)
 

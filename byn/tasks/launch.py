@@ -7,11 +7,9 @@ import byn.logging
 app = Celery(
     'byn.tasks.launch',
     include=[
-        'byn.tasks.bcse',
         'byn.tasks.backup',
         'byn.tasks.external_rates',
         'byn.tasks.nbrb',
-        'byn.tasks.produce_predict',
     ]
 )
 
