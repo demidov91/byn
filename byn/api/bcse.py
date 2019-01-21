@@ -129,7 +129,7 @@ async def _listen_to_bcse_till(finish_datetime):
 
             logger.debug('New bcse data: %s', new_data)
 
-            results = insert_bcse_async(new_data)
+            results = insert_bcse_async(new_data, timeout=1)
             await _publish_bcse_in_redis(redis, data)
 
             for r in results:

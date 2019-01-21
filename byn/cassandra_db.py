@@ -117,8 +117,8 @@ def _handle_async_exception(exception: BaseException):
     logger.exception('Error while executing async cassandra query: %s', exception)
 
 
-def _launch_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, Any]]]):
-    return (db.execute_async(query, row) for row in data)
+def _launch_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, Any]]], **kwargs):
+    return (db.execute_async(query, row, **kwargs) for row in data)
 
 
 def _execute_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, Any]]]):
@@ -130,6 +130,15 @@ def _execute_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, An
     for r in _launch_in_parallel(query, data):
         r.result()
 
+
+def insert_nbrb(data):
+    _execute_in_parallel(
+        'INSERT into nbrb '
+        '(dummy, date, usd, eur, rub, uah) '
+        'VALUES '
+        '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
+        data
+    )
 
 
 def insert_nbrb_local(data):
@@ -212,12 +221,13 @@ def insert_external_rate_live_async(row: ExternalRateData):
     ).add_errback(_handle_async_exception)
 
 
-def insert_bcse_async(data: Iterable[BcseData]):
+def insert_bcse_async(data: Iterable[BcseData], **kwargs):
     return _launch_in_parallel(
         'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
         'VALUES (%s, %s, %s, %s)',
         [
             (row.currency, row.ms_timestamp_operation, row.ms_timestamp_received, row.rate)
             for row in data
-        ]
+        ],
+        **kwargs
     )

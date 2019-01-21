@@ -8,7 +8,7 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
-from typing import Collection, Tuple, Iterable
+from typing import Collection, Dict, Tuple, Iterable
 
 import requests
 import celery
@@ -52,6 +52,7 @@ def update_nbrb_rates_async():
     return (
         load_trade_dates.si() |
         extract_nbrb.s() |
+        load_nbrb.s() |
         celery.group(
             load_nbrb_local.si(),
             load_dxy_12MSK.si()
@@ -68,18 +69,18 @@ def load_trade_dates():
 
 
 @app.task
-def extract_nbrb(last_trade_dates: Collection[str]):
+def extract_nbrb(last_trade_dates: Collection[str]) -> Iterable[Dict[str, str]]:
     record = get_last_nbrb_rates()
     if record is None:
         logger.error('No nbrb rates!')
-        return
+        return ()
 
     date_to_start = record.date.date() + datetime.timedelta(days=2)
     date_to_end = datetime.date.today() + datetime.timedelta(days=1)
 
     if date_to_end < date_to_start:
         logger.info('Nothing to update.')
-        return
+        return ()
 
     raw_rates = []
     for curr_id in CURR_IDS.keys():
@@ -175,7 +176,7 @@ def load_nbrb_global():
 
 
 @app.task
-def nbrb_to_cassandra(rates):
+def load_nbrb(rates):
     cass_rates = defaultdict(dict)
     for rate in rates:
         cass_rates[rate['Date']][rate['cur']] = Decimal(rate['rate'])
@@ -192,7 +193,7 @@ def nbrb_file_to_cassandra():
     with open(const.CLEAN_NBRB_DATA, mode='rt') as f:
         data = json.load(f)
 
-    nbrb_to_cassandra.apply(args=(data,))
+    load_nbrb(data)
 
 
 def dxy_12MSK_to_cassandra():
