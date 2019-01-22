@@ -176,7 +176,7 @@ async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Opt
 async def _publish_bcse_in_redis(redis: Redis, data: List[List]):
     try:
         str_data = json.dumps(data)
-        await redis.set(const.BCSE_REDIS_KEY, str_data)
+        await redis.set(const.BCSE_USD_REDIS_KEY, str_data)
     except asyncio.CancelledError as e:
         raise e
     except:

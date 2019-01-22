@@ -2,7 +2,7 @@ import datetime
 
 import pytest
 
-from byn.api import bcse
+from byn.realtime import bcse
 
 
 @pytest.mark.parametrize('date,expected', [

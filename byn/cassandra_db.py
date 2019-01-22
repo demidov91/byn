@@ -10,7 +10,7 @@ from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from byn.datatypes import ExternalRateData, BcseData
+from byn.datatypes import ExternalRateData, BcseData, PredictInput, PredictOutput
 
 
 logger = logging.getLogger(__name__)
@@ -242,3 +242,7 @@ def insert_bcse_async(data: Iterable[BcseData], **kwargs):
         ],
         **kwargs
     )
+
+
+def insert_prediction_async(input_data: PredictInput, output_data: PredictOutput):
+    return None

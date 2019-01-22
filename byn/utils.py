@@ -1,7 +1,9 @@
 import asyncio
 import datetime
+import json
 import logging
 import os
+from decimal import Decimal
 from functools import wraps
 
 import aioredis
@@ -55,3 +57,10 @@ async def create_redis() -> aioredis.Redis:
         f'redis://{os.environ["REDIS_CACHE_HOST"]}',
         db=const.REDIS_CACHE_DB
     )
+
+
+class DecimalAwareEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return str(o)
+        return super().default(o)

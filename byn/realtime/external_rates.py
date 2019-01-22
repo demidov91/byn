@@ -16,7 +16,6 @@ from byn.utils import always_on_coroutine, create_redis
 
 
 logger = logging.getLogger(__name__)
-CURRENCIES_TO_LISTEN = 'EUR', 'RUB', 'UAH', 'DXY'
 forexpf_code_to_currency = {y: x for x, y in CURRENCY_CODES.items()}
 
 
@@ -65,7 +64,7 @@ async def _producer(queue: Queue):
         logger.debug('sid: %s', session_id)
 
         async with ClientSession() as subscribe_client:
-            for currency in CURRENCIES_TO_LISTEN:
+            for currency in const.FOREXPF_CURRENCIES_TO_LISTEN:
                 response = await subscribe_client.get(
                     'https://charts.profinance.ru/html/tw/subscribe?'
                     f'sid={session_id}&symbol={CURRENCY_CODES[currency]}&resolution=1&subscribe=true'
@@ -127,7 +126,7 @@ async def _worker(queue: Queue):
         try:
             await redis_client.mset(
                 data.currency, data.close,
-                f'{data.currency}_timestamp', int(data.timestamp_received * 1000)
+                f'{data.currency}_ms_timestamp', int(data.timestamp_received * 1000)
             )
         except asyncio.CancelledError as e:
             raise e

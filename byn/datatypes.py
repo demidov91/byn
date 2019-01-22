@@ -1,5 +1,7 @@
 import dataclasses
+import datetime
 from decimal import Decimal
+from typing import Collection, Tuple
 
 
 @dataclasses.dataclass
@@ -20,3 +22,17 @@ class BcseData:
     ms_timestamp_operation: int
     ms_timestamp_received: int
     rate: str
+
+
+@dataclasses.dataclass
+class PredictInput:
+    eur: Decimal
+    rub: Decimal
+    uah: Decimal
+    dxy: Decimal
+    usd_byn: Collection[Tuple[datetime.datetime, Decimal]]
+
+
+@dataclasses.dataclass
+class PredictOutput:
+    rate: Decimal
