@@ -1,3 +1,5 @@
+import sys
+
 from byn.cassandra_db import db
 
 
@@ -7,4 +9,4 @@ def run(*table_names: str):
 
 
 if __name__ == '__main__':
-    run('nbrb', 'trade_date')
+    run(*sys.argv)

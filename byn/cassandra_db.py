@@ -80,12 +80,14 @@ def get_last_nbrb_global_with_rates():
 def get_last_external_currency_datetime(currency: str) -> datetime.datetime:
     current_year = datetime.date.today().year
 
-    return max((
+    utc_datetime = max((
         x[0] for x in db.execute(
             'select datetime from external_rate where currency=%s and year in (%s, %s) per partition limit 1',
             (currency, current_year, current_year - 1)
         )
-    ), default=datetime.datetime.fromtimestamp(0))
+    ), default=datetime.datetime.fromtimestamp(0)).replace(tzinfo=datetime.timezone.utc)
+
+    return datetime.datetime.fromtimestamp(utc_datetime.timestamp())
 
 
 def get_nbrb_gt(date):
@@ -202,7 +204,16 @@ def insert_external_rates(
         'INSERT into external_rate (year, currency, datetime, open, close, low, high, volume) '
         'VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
         [
-            (row[0].year, currency, row[0], row[1], row[2], row[3], row[4], row[5])
+            (
+                row[0].year,
+                currency,
+                int(row[0].timestamp() * 1000),
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                row[5]
+            )
             for row in data
         ]
     )
