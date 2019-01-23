@@ -30,7 +30,7 @@ class PredictInput:
     rub: Decimal
     uah: Decimal
     dxy: Decimal
-    usd_byn: Collection[Tuple[datetime.datetime, Decimal]]
+    usd_byn__ms_rate: Collection[Tuple[int, Decimal]]
 
 
 @dataclasses.dataclass

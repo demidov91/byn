@@ -23,7 +23,8 @@ async def start_predicting():
 
     while True:
         external_rates = (x.decode() for x in await redis.mget(*const.FOREXPF_CURRENCIES_TO_LISTEN))
-        usd_byn_data = await redis.get(const.BCSE_USD_REDIS_KEY) or []
+        usd_byn_raw_data = await redis.get(const.BCSE_USD_REDIS_KEY)
+        usd_byn_data = json.loads(usd_byn_raw_data) if usd_byn_raw_data else ()
 
         input_data = _build_predict_input(
             names=const.FOREXPF_CURRENCIES_TO_LISTEN,
@@ -45,16 +46,16 @@ async def start_predicting():
 
 def _build_predict_input(*, names, values, usd_byn) -> PredictInput:
     data = dict(zip((x.lower() for x in names), values))
-    data['usd_byn'] = tuple(
-        (datetime.datetime.fromtimestamp(timestamp), Decimal(rate))
-        for timestamp, rate in usd_byn
-    )
 
+    for pair in usd_byn:
+        pair[1] = Decimal(pair[1])
+
+    data['usd_byn__ms_rate'] = usd_byn
     return PredictInput(**data)
 
 
 def predict(data: PredictInput) -> PredictOutput:
-    return PredictOutput(rate=1)
+    return PredictOutput(rate=Decimal(1))
 
 
 
