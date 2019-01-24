@@ -13,6 +13,7 @@ from byn.cassandra_db import insert_external_rate_live_async
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
 from byn.utils import always_on_coroutine, create_redis
+from byn.tasks.external_rates import update_all_currencies_async
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ async def listen_forexpf():
         wait_for = _get_time_to_monday(current_dt)
         logger.info('Gonna wait for %s seconds for forexpf to start.', wait_for)
         await asyncio.sleep(wait_for)
+
+    update_all_currencies_async.delay()
 
     queue = Queue()
     for _ in range(const.FOREXPF_WORKERS_COUNT):

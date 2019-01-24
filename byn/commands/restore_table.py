@@ -205,7 +205,7 @@ def run(table: str, path: str, override: str):
         _restore_from_csv_data(
             table,
             data,
-            decimal_columns=['dxy'],
+            decimal_columns=['dxy', 'predicted'],
             bool_columns=['dummy'],
         )
 

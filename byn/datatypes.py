@@ -1,10 +1,12 @@
 import dataclasses
 import datetime
 from decimal import Decimal
-from typing import Collection, Tuple
+from dataclasses import dataclass, astuple
+from enum import Enum
+from typing import Collection, Tuple, Optional
 
 
-@dataclasses.dataclass
+@dataclass
 class ExternalRateData:
     currency: str
     timestamp_open: int
@@ -16,12 +18,44 @@ class ExternalRateData:
     timestamp_received: float
 
 
-@dataclasses.dataclass
+@dataclass
 class BcseData:
     currency: str
     ms_timestamp_operation: int
     ms_timestamp_received: int
     rate: str
+
+
+@dataclass
+class LocalRates:
+    # eur/usd
+    eur: Decimal
+    # usd/rub
+    rub: Decimal
+    # usd/uah
+    uah: Decimal
+    # dollar index
+    dxy: Optional[Decimal]
+
+    def to_global(self) -> 'LocalRates':
+        return LocalRates(
+            eur=1 / self.eur / self.dxy,
+            rub=self.rub / self.dxy,
+            uah=self.uah / self.dxy,
+            dxy=None
+        )
+
+    def __add__(self, other: 'LocalRates'):
+        if other == 0:
+            return self
+
+        return LocalRates(*(a + b for a, b in zip(astuple(self), astuple(other))))
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __truediv__(self, divider):
+        return LocalRates(*(x / divider for x in astuple(self)))
 
 
 @dataclasses.dataclass
@@ -36,3 +70,11 @@ class PredictInput:
 @dataclasses.dataclass
 class PredictOutput:
     rate: Decimal
+
+
+
+
+
+@dataclass
+class PredictServerMessage:
+    message_type: str

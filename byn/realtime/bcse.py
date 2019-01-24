@@ -7,7 +7,7 @@ import datetime
 import json
 import logging
 from collections import OrderedDict
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from aiohttp.client import ClientSession
 from aioredis import Redis
@@ -173,7 +173,7 @@ async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Opt
     return required_raw_data_item.get('data')
 
 
-async def _publish_bcse_in_redis(redis: Redis, data: List[List]):
+async def _publish_bcse_in_redis(redis: Redis, data: Sequence[Sequence]):
     try:
         str_data = json.dumps(data)
         await redis.set(const.BCSE_USD_REDIS_KEY, str_data)

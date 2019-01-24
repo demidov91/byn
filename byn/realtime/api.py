@@ -20,7 +20,7 @@ async def listen_api():
 @always_on_coroutine
 async def _listen_subscribe_for_predictions():
     redis = await create_redis()
-    channel,  = await redis.subscribe(const.PREDICT_REDIS_CHANNEL)
+    channel,  = await redis.subscribe(const.PUBLISH_PREDICT_REDIS_CHANNEL)
 
     while True:
         raw_message = await channel.get()

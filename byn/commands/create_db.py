@@ -30,8 +30,22 @@ def run():
                'rub decimal,'
                'uah decimal, '
                'dxy decimal, '
+               'predicted decimal, '
+               'prediction_error decimal, '
                'PRIMARY KEY (dummy, date)'
                ') WITH CLUSTERING ORDER BY (date DESC)')
+
+    db.execute(
+        'CREATE TABLE IF NOT EXISTS rolling_average('
+        'date date, '
+        'duration int, '
+        'eur decimal,'
+        'rub decimal,'
+        'uah decimal, '
+        'dxy decimal, '
+        'PRIMARY KEY (date, duration)'
+        ') WITH CLUSTERING ORDER BY (duration ASC)'
+    )
 
     db.execute('CREATE TABLE IF NOT EXISTS trade_date('
                'dummy boolean, ' # yes, I consider this table small enough to store on one partition (less than 2 mln. records)

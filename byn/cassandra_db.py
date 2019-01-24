@@ -4,13 +4,14 @@ import os
 import threading
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict
+from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence
 
 from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from byn.datatypes import ExternalRateData, BcseData, PredictInput, PredictOutput
+from byn.datatypes import ExternalRateData, BcseData, PredictOutput, LocalRates
+from byn.predict.predictor import PredictionRecord
 
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,12 @@ def get_last_external_currency_datetime(currency: str) -> datetime.datetime:
     ), default=datetime.datetime.fromtimestamp(0)).replace(tzinfo=datetime.timezone.utc)
 
     return datetime.datetime.fromtimestamp(utc_datetime.timestamp())
+
+
+def get_last_rolling_average_date() -> datetime.date:
+    dates = tuple(db.execute('SELECT date FROM rolling_average per partition limit 1'))
+    logger.debug('%s rolling average dates retrieved while looking for the last', len(dates))
+    return max([x[0] for x in dates], default=None)
 
 
 def get_nbrb_gt(date):
@@ -244,5 +251,11 @@ def insert_bcse_async(data: Iterable[BcseData], **kwargs):
     )
 
 
-def insert_prediction_async(input_data: PredictInput, output_data: PredictOutput):
-    return None
+def insert_prediction_async(input_data: LocalRates, output_data: PredictionRecord):
+    raise NotImplementedError
+
+
+def insert_rolling_average(date: datetime.date, duration: int, data: Sequence[Decimal]):
+    db.execute('INSERT into rolling_average (date, duration, eur, rub, uah, dxy) '
+               'VALUES (%s, %s, %s, %s, %s, %s)',
+               (date, duration, *data))

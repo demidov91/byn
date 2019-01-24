@@ -10,6 +10,7 @@ from collections import defaultdict
 from decimal import Decimal
 from typing import Collection, Dict, Tuple, Iterable
 
+import numpy as np
 import requests
 import celery
 from sklearn.neighbors import KNeighborsRegressor
@@ -17,11 +18,13 @@ from sklearn.neighbors import KNeighborsRegressor
 import byn.constants as const
 from byn import forexpf
 from byn.tasks.launch import app
+#from byn.tasks.accamulated_error import update_prediction_error
 from byn.cassandra_db import (
     get_last_nbrb_rates,
     get_last_nbrb_local_rates,
     get_last_nbrb_global_record,
     get_last_nbrb_global_with_rates,
+    get_last_rolling_average_date,
     get_nbrb_gt,
     get_nbrb_local_gt,
     get_nbrb_global_gt,
@@ -30,6 +33,7 @@ from byn.cassandra_db import (
     insert_nbrb_local,
     add_nbrb_global,
     insert_dxy_12MSK,
+    insert_rolling_average,
 )
 
 
@@ -57,7 +61,9 @@ def update_nbrb_rates_async():
             load_nbrb_local.si(),
             load_dxy_12MSK.si()
         ) |
-        load_nbrb_global.si()
+        load_nbrb_global.si() |
+        load_rolling_average().si()# |
+#        load_daily_predict().si()
     )()
 
 
@@ -187,6 +193,39 @@ def load_nbrb(rates):
     data = tuple(cass_rates.values())
     insert_nbrb_rates(data)
     return data
+
+
+@app.task
+def load_rolling_average():
+    last_rolling_average_date = get_last_rolling_average_date()
+    data = tuple(get_nbrb_global_gt(0))[::-1]
+    dates = [x[1].date() for x in data]
+    rates = np.array([(x.eur, x.rub, x.uah, x.dxy) for x in data])
+
+    if last_rolling_average_date is None:
+        start_index = 0
+    else:
+        start_index = dates.index(last_rolling_average_date) + 1
+
+    rolling_averages = {}
+
+    for i in range(start_index, len(rates)):
+        per_duration = {x: [] for x in const.ROLLING_AVERAGE_DURATIONS}
+        rolling_averages[dates[i]] = per_duration
+        for duration in const.ROLLING_AVERAGE_DURATIONS:
+            if i < duration:
+                continue
+
+            for data_column in range(4):
+                per_duration[duration].append(
+                    Decimal(np.mean(rates[i - duration:i, data_column]))
+                )
+
+    for date in rolling_averages:
+        for duration in const.ROLLING_AVERAGE_DURATIONS:
+            if rolling_averages[date][duration]:
+                insert_rolling_average(date, duration, rolling_averages[date][duration])
+
 
 
 def nbrb_file_to_cassandra():

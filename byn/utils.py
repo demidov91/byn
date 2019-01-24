@@ -62,5 +62,5 @@ async def create_redis() -> aioredis.Redis:
 class DecimalAwareEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Decimal):
-            return str(o)
+            return float(o)
         return super().default(o)
