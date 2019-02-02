@@ -18,7 +18,7 @@ from sklearn.neighbors import KNeighborsRegressor
 import byn.constants as const
 from byn import forexpf
 from byn.tasks.launch import app
-#from byn.tasks.accamulated_error import update_prediction_error
+from byn.tasks.daily_predict import daily_predict
 from byn.cassandra_db import (
     get_last_nbrb_rates,
     get_last_nbrb_local_rates,
@@ -62,8 +62,10 @@ def update_nbrb_rates_async():
             load_dxy_12MSK.si()
         ) |
         load_nbrb_global.si() |
-        load_rolling_average().si()# |
-#        load_daily_predict().si()
+        celery.group(
+            load_rolling_average.si(),
+            daily_predict.si(),
+        )
     )()
 
 
