@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from decimal import Decimal
+from enum import Enum
 from functools import wraps
 
 import aioredis
@@ -63,4 +64,6 @@ class DecimalAwareEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Decimal):
             return float(o)
+        if isinstance(o, Enum):
+            return o.value
         return super().default(o)

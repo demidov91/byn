@@ -79,8 +79,9 @@ async def run():
 
             elif command == PredictCommand.PREDICT:
                 ms_timestamp = message['data'].pop('ms_timestamp')
+                data = {x: Decimal(message['data'][x]) for x in message['data']}
 
-                local_rates = LocalRates(**command['data'])
+                local_rates = LocalRates(**data)
                 prediction = predictor.predict_current_by_local_for_record(
                     local_rates,
                     rolling_average=rolling_average
@@ -122,7 +123,7 @@ def set_active_bcse(
     trusted_bcse = bcse_pairs[trust]
 
     X = [bcse_converter.get_by_timestamp(x[0]) for x in trusted_bcse]
-    Y = trusted_bcse[:, 1]
+    Y = np.array(trusted_bcse[:, 1], dtype='float64')
 
     predictor.set_todays_local_rates(X, Y, rolling_average)
 

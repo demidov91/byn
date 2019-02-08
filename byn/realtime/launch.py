@@ -6,6 +6,7 @@ from byn.realtime.bcse import listen_bcse
 from byn.realtime.synchronization import start as start_synchronization
 from byn.realtime.api import listen_api
 from byn.realtime.predict_server import run as run_predict_server
+from byn.realtime.predict_scheduler import predict_scheduler
 
 # Initialize logging configuration.
 import byn.logging
@@ -19,6 +20,7 @@ async def main():
         listen_bcse(),
         listen_api(),
         run_predict_server(),
+        predict_scheduler(),
     )
 
 

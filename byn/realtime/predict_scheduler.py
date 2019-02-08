@@ -29,14 +29,14 @@ async def predict_scheduler():
             values=external_rates,
         )
 
-        output_data = await predict_with_timeout(redis, input_data, timeout=0.5)
+        output_data = await predict_with_timeout(redis, input_data, timeout=500)
+        if output_data is not None:
+            # insert_prediction_async(input_data, output_data)
 
-        insert_prediction_async(input_data, output_data)
-
-        await redis.publish(const.PUBLISH_PREDICT_REDIS_CHANNEL, json.dumps({
-            'input': dataclasses.asdict(input_data),
-            'output': dataclasses.asdict(output_data),
-        }, cls=DecimalAwareEncoder))
+            await redis.publish(const.PUBLISH_PREDICT_REDIS_CHANNEL, json.dumps({
+                'input': dataclasses.asdict(input_data),
+                'output': dataclasses.asdict(output_data),
+            }, cls=DecimalAwareEncoder))
 
         await asyncio.sleep(const.PREDICT_UPDATE_INTERVAL)
 
