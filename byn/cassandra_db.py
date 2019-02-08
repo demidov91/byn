@@ -5,7 +5,7 @@ import threading
 from collections import defaultdict
 from dataclasses import asdict
 from decimal import Decimal
-from functools import lru_cache
+from functools import lru_cache, partial
 from itertools import chain
 from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
 
@@ -129,59 +129,78 @@ def get_rolling_average_by_date(date: datetime.date) -> Iterable[Sequence[Decima
     return db.execute('SELECT duration, eur, rub, uah FROM rolling_average where date=%s', (date, ))
 
 
-@lru_cache
+@lru_cache()
 def get_plain_rolling_average_by_date(date: datetime.date) -> Tuple[Decimal]:
+    logger.debug(date)
     data = get_rolling_average_by_date(date)
 
     data = {x[0]: x[1:] for x in data}
     return tuple(chain(*(data[x] for x in const.ROLLING_AVERAGE_DURATIONS)))
 
 
-def get_external_rate_live(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str: Iterable[list]]:
+def get_external_rate_live(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str, Iterable[list]]:
     end_dt = end_dt or datetime.datetime(2100, 1, 1)
+    currencies = 'eur', 'rub', 'uah', 'dxy'
 
-    rows = db.execute(
-        'SELECT currency, timestamp_open, timestamp_received, close '
-        'FROM external_rate_live '
-        'WHERE currency in (eur, rub, uah, dxy) and timestamp_open>=%s and timestamp_open<%s '
-        'ORDER BY volume ASC',
-        (
-            int(start_dt.timestamp() * 1000),
-            int(end_dt.timestamp() * 1000)
-        )
-    )
+    data = {}
+    rs = []
 
-    data = defaultdict(lambda: defaultdict(list))
-    for row in rows:
-        data[row.currency][row.timestamp_open].append([row.timestamp_received, Decimal(row.close)])
+    for currency in currencies:
+        rs.append(db.execute_async(
+            'SELECT currency, timestamp_open, timestamp_received, close '
+            'FROM external_rate_live '
+            "WHERE currency=%s and timestamp_open>=%s and timestamp_open<%s "
+            'ORDER BY timestamp_open ASC, volume ASC',
+            (
+                currency,
+                int(start_dt.timestamp() * 1000),
+                int(end_dt.timestamp() * 1000)
+            )
+        ).add_callback(
+            partial(
+                _process_external_rate_live_one_currency,
+                data=data,
+                currency=currency.upper()
+            )
+        ))
 
-    for rates in data.values():
-        close_times = list(rates.keys())[1:]
-        close_times.append(None)
-
-        for open_time, close_time in zip(rates, close_times):
-            for time_rate_pair in rates[open_time]:
-                if time_rate_pair[0] < open_time:
-                    time_rate_pair[0] = open_time
-                elif time_rate_pair[0] >= close_time:
-                    time_rate_pair[0] = close_time - datetime.timedelta(seconds=1)
-
-    for currency in data:
-        data[currency] = tuple(chain(*data[currency].values()))
+    for r in rs:
+        r.result()
 
     return data
 
 
-def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str: Iterable[list]]:
+def _process_external_rate_live_one_currency(rows, data: dict, currency: str):
+    rates = defaultdict(list)
+
+    for row in rows:
+        rates[row.timestamp_open].append([row.timestamp_received, Decimal(row.close)])
+
+
+    close_times = list(rates.keys())[1:]
+    close_times.append(None)
+
+    for open_time, close_time in zip(rates, close_times):
+        for time_rate_pair in rates[open_time]:
+            if time_rate_pair[0] < open_time:
+                time_rate_pair[0] = open_time
+            elif time_rate_pair[0] >= close_time:
+                time_rate_pair[0] = close_time - datetime.timedelta(seconds=1)
+
+    data[currency] = tuple(chain(*rates.values()))
+
+
+def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str, Iterable[list]]:
     end_dt = end_dt or datetime.datetime(2100, 1, 1)
 
     rows = db.execute(
         'SELECT currency, datetime, open, close '
         'FROM external_rate '
-        'WHERE currency in (eur, rub, uah, dxy) and datetime>=%s and datetime<%s '
-        'ORDER BY volume ASC',
+        "WHERE currency in ('EUR', 'RUB', 'UAH', 'DXY') and year in (%s, %s) and "
+        "datetime>=%s and datetime<%s ",
         (
             start_dt.date().year,
+            end_dt.date().year,
             int(start_dt.timestamp() * 1000),
             int(end_dt.timestamp() * 1000)
         )
@@ -193,11 +212,13 @@ def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.dat
 
     processed_data = {}
     for currency, rates in raw_data.items():
+        rates = tuple(sorted(rates, key=lambda x: x[0]))
+
         close_times = [x[0] - datetime.timedelta(seconds=1) for x in rates][1:]
         pairs_to_return = []
         for i in range(len(close_times)):
-            pairs_to_return.append((rates[i][0], rates[i][1]))
-            pairs_to_return.append((close_times[i], rates[i][2]))
+            pairs_to_return.append((int(rates[i][0].timestamp()), rates[i][1]))
+            pairs_to_return.append((int(close_times[i].timestamp()), rates[i][2]))
 
         processed_data[currency] = pairs_to_return
 

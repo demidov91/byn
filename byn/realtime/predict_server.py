@@ -3,9 +3,8 @@ Coroutine which listens for a command redis queue
     predicting rates and rebuilding the model whenever required by a queue command.
 """
 import datetime
-import json
 import logging
-from dataclasses import asdict
+from decimal import Decimal
 
 import numpy as np
 
@@ -18,6 +17,7 @@ from byn.cassandra_db import (
     get_plain_rolling_average_by_date,
     get_bcse_in
 )
+from byn.predict.utils import ignore_containing_nan
 from byn.realtime.synchronization import (
     wait_for_data_threads,
     receive_predictor_command,
@@ -50,10 +50,10 @@ async def run():
         if predictor.meta.last_date < today:
             start_dt = datetime.datetime.fromordinal(today.toordinal())
             bcse_data = np.array([
-                (int(dt.timestamp()), rate)
+                (int(dt.timestamp()), Decimal(rate))
                 for dt, rate in
                 get_bcse_in('USD', start_dt=start_dt)
-            ])
+            ], dtype=np.dtype(object))
 
             set_active_bcse(
                 predictor=predictor,
@@ -96,7 +96,7 @@ def set_active_bcse(
         bcse_pairs,
         rolling_average
 ):
-    if not bcse_pairs:
+    if len(bcse_pairs) == 0:
         logger.debug('Empty bcse data. Skipping.')
         return
 
@@ -106,7 +106,8 @@ def set_active_bcse(
     fake_rate = bcse_converter.get_fake_rate(open_timestamp)
 
     if fake_rate is None:
-        predictor.set_todays_rates(predictor.x_train, predictor.y_train)
+        neighbor_x, neighbor_y = ignore_containing_nan(predictor.x_train, predictor.y_train)
+        predictor.set_todays_rates(neighbor_x, neighbor_y)
 
         fake_rate = predictor.predict_by_local(
             bcse_converter.get_by_timestamp(open_timestamp),

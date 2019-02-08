@@ -2,6 +2,7 @@
 .env
 __pycache__
 celerybeat-schedule
+*.ipynb
 
 data/
 byn/predict/

@@ -79,6 +79,9 @@ def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolli
     else:
         x, y, dates = _get_X_Y_with_empty_rolling(date)
 
+    x = np.array(x, dtype='float64')
+    y = np.array(y, dtype='float64')
+
     pre_processor = GlobalToNormlizedDataProcessor()
     pre_processor.fit(x, y)
     x = pre_processor.transform_global_vectorized(x)
@@ -96,8 +99,7 @@ def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolli
         predictor.y_train = y
         predictor._rebuild_ridge_model(cache_key='byn-7_' + date.strftime('%Y-%m-%d'))
 
-    predictor.meta = object()
-    predictor.meta.last_day = dates[-1]
+    predictor.meta.last_date = dates[-1]
 
     return predictor
 

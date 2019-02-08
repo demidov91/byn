@@ -23,7 +23,7 @@ PREDICTOR_COMMAND_QUEUE = 'PREDICTOR_COMMAND'
 PREDICTION_READY_QUEUE = 'PREDICTION_READY'
 
 async def start():
-    (await create_redis()).hmset_dict(WAIT_KEY, {
+    await (await create_redis()).hmset_dict(WAIT_KEY, {
         EXTERNAL_HISTORY: 0,
         EXTERNAL_LIVE: 0,
         BCSE: 0,
@@ -35,7 +35,7 @@ async def wait_for_data_threads():
 
     while True:
         data = await redis.hgetall(WAIT_KEY)
-        if any(data.values()):
+        if not all(data.values()):
             logger.info('Data threads status: %s', data)
             await asyncio.sleep(1)
         else:

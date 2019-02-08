@@ -10,6 +10,7 @@ app = Celery(
         'byn.tasks.backup',
         'byn.tasks.external_rates',
         'byn.tasks.nbrb',
+        'byn.realtime.external_rates',
     ]
 )
 

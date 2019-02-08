@@ -1,3 +1,5 @@
+import datetime
+import logging
 from itertools import chain
 
 import numpy as np
@@ -10,6 +12,9 @@ from byn.cassandra_db import (
 from byn.realtime.detailed_rates import RatesDetailedExtractor
 
 
+logger = logging.getLogger(__name__)
+
+
 class BcseConverter:
     def __init__(self):
         self.resolved_bcse_rates = {}
@@ -18,7 +23,7 @@ class BcseConverter:
 
     def update(self, bcse_pairs):
         new_bcse = [x for x in bcse_pairs if x[0] not in self.resolved_bcse_rates]
-        start_dt = new_bcse[0][0]
+        start_dt = datetime.datetime.fromtimestamp(new_bcse[0][0])
 
         external_live_data = get_external_rate_live(start_dt=start_dt)
         external_historical_data = get_external_rate(start_dt=start_dt)
@@ -44,12 +49,13 @@ class BcseConverter:
 
 
 def _join_external_rates(one, two):
-    cuurencies = set(one.keys())
-    cuurencies.update(two.keys())
+    currencies = set(one.keys())
+    currencies.update(two.keys())
+
     return {
         currency: np.array(tuple(
             sorted(chain(one[currency], two[currency]), key=lambda x: x[0])
         ))
-        for currency in cuurencies
+        for currency in currencies
     }
 
