@@ -14,10 +14,23 @@ from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
 from byn.utils import always_on_coroutine, create_redis
 from byn.tasks.external_rates import update_all_currencies_async
+from byn.tasks.launch import app
+from byn.realtime.synchronization import mark_as_ready, EXTERNAL_LIVE, EXTERNAL_HISTORY
 
 
 logger = logging.getLogger(__name__)
 forexpf_code_to_currency = {y: x for x, y in CURRENCY_CODES.items()}
+
+
+
+@app.task(retry=True)
+def load_history():
+    (update_all_currencies_async.si() | mark_load_history_ready.si())()
+
+
+@app.task(retry=True)
+def mark_load_history_ready():
+    asyncio.run(mark_as_ready(EXTERNAL_HISTORY))
 
 
 @always_on_coroutine
@@ -29,7 +42,7 @@ async def listen_forexpf():
         logger.info('Gonna wait for %s seconds for forexpf to start.', wait_for)
         await asyncio.sleep(wait_for)
 
-    update_all_currencies_async.delay()
+    load_history.delay()
 
     queue = Queue()
     for _ in range(const.FOREXPF_WORKERS_COUNT):
@@ -78,6 +91,7 @@ async def _producer(queue: Queue):
                 else:
                     logger.error("Couldn't subscribe to %s", currency)
 
+        await mark_as_ready(EXTERNAL_LIVE)
         await _sse_reader(long_poll_response, queue)
 
 

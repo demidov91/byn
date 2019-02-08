@@ -2,14 +2,18 @@ import datetime
 import logging
 import os
 import threading
+from collections import defaultdict
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence
+from functools import lru_cache
+from itertools import chain
+from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
 
 from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
+import byn.constants as const
 from byn.datatypes import ExternalRateData, BcseData, PredictOutput, LocalRates
 from byn.predict.predictor import PredictionRecord
 
@@ -106,7 +110,7 @@ def get_nbrb_local_gt(date):
 def get_nbrb_global_gt(date):
     return db.execute('select * from nbrb_global where dummy=true and date>%s', (date or 0, ))
 
-def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.datetime=None):
+def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.datetime=None) -> Iterable[Tuple[datetime.datetime, Decimal]]:
     end_dt = end_dt or datetime.datetime(2035, 1, 1)
     start_dt = int(start_dt.timestamp() * 1000)
     end_dt = int(end_dt.timestamp() * 1000)
@@ -120,6 +124,84 @@ def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.dat
         (dt.replace(tzinfo=datetime.timezone.utc), rate)
         for dt, rate in raw_output
     )
+
+def get_rolling_average_by_date(date: datetime.date) -> Iterable[Sequence[Decimal]]:
+    return db.execute('SELECT duration, eur, rub, uah FROM rolling_average where date=%s', (date, ))
+
+
+@lru_cache
+def get_plain_rolling_average_by_date(date: datetime.date) -> Tuple[Decimal]:
+    data = get_rolling_average_by_date(date)
+
+    data = {x[0]: x[1:] for x in data}
+    return tuple(chain(*(data[x] for x in const.ROLLING_AVERAGE_DURATIONS)))
+
+
+def get_external_rate_live(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str: Iterable[list]]:
+    end_dt = end_dt or datetime.datetime(2100, 1, 1)
+
+    rows = db.execute(
+        'SELECT currency, timestamp_open, timestamp_received, close '
+        'FROM external_rate_live '
+        'WHERE currency in (eur, rub, uah, dxy) and timestamp_open>=%s and timestamp_open<%s '
+        'ORDER BY volume ASC',
+        (
+            int(start_dt.timestamp() * 1000),
+            int(end_dt.timestamp() * 1000)
+        )
+    )
+
+    data = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        data[row.currency][row.timestamp_open].append([row.timestamp_received, Decimal(row.close)])
+
+    for rates in data.values():
+        close_times = list(rates.keys())[1:]
+        close_times.append(None)
+
+        for open_time, close_time in zip(rates, close_times):
+            for time_rate_pair in rates[open_time]:
+                if time_rate_pair[0] < open_time:
+                    time_rate_pair[0] = open_time
+                elif time_rate_pair[0] >= close_time:
+                    time_rate_pair[0] = close_time - datetime.timedelta(seconds=1)
+
+    for currency in data:
+        data[currency] = tuple(chain(*data[currency].values()))
+
+    return data
+
+
+def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str: Iterable[list]]:
+    end_dt = end_dt or datetime.datetime(2100, 1, 1)
+
+    rows = db.execute(
+        'SELECT currency, datetime, open, close '
+        'FROM external_rate '
+        'WHERE currency in (eur, rub, uah, dxy) and datetime>=%s and datetime<%s '
+        'ORDER BY volume ASC',
+        (
+            start_dt.date().year,
+            int(start_dt.timestamp() * 1000),
+            int(end_dt.timestamp() * 1000)
+        )
+    )
+
+    raw_data = defaultdict(list)
+    for row in rows:
+        raw_data[row[0]].append(row[1:])
+
+    processed_data = {}
+    for currency, rates in raw_data.items():
+        close_times = [x[0] - datetime.timedelta(seconds=1) for x in rates][1:]
+        pairs_to_return = []
+        for i in range(len(close_times)):
+            pairs_to_return.append((rates[i][0], rates[i][1]))
+            pairs_to_return.append((close_times[i], rates[i][2]))
+
+        processed_data[currency] = pairs_to_return
+
+    return processed_data
 
 
 def _handle_async_exception(exception: BaseException):

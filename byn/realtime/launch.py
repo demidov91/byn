@@ -3,19 +3,22 @@ import asyncio
 
 from byn.realtime.external_rates import listen_forexpf
 from byn.realtime.bcse import listen_bcse
-#from byn.realtime.produce_predict import infinite_prediction
+from byn.realtime.synchronization import start as start_synchronization
 from byn.realtime.api import listen_api
+from byn.realtime.predict_server import run as run_predict_server
 
 # Initialize logging configuration.
 import byn.logging
 
 
 async def main():
+    await start_synchronization()
+
     await asyncio.gather(
         listen_forexpf(),
         listen_bcse(),
-#        infinite_prediction(),
         listen_api(),
+        run_predict_server(),
     )
 
 

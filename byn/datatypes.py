@@ -72,9 +72,7 @@ class PredictOutput:
     rate: Decimal
 
 
-
-
-
-@dataclass
-class PredictServerMessage:
-    message_type: str
+class PredictCommand(Enum):
+    NEW_BCSE = 'NEW_BCSE'
+    REBUILD = 'REBUILD'
+    PREDICT = 'PREDICT'

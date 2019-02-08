@@ -30,8 +30,6 @@ def run():
                'rub decimal,'
                'uah decimal, '
                'dxy decimal, '
-               'predicted decimal, '
-               'prediction_error decimal, '
                'PRIMARY KEY (dummy, date)'
                ') WITH CLUSTERING ORDER BY (date DESC)')
 

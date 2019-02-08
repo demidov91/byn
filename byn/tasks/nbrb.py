@@ -215,12 +215,12 @@ def load_rolling_average():
         per_duration = {x: [] for x in const.ROLLING_AVERAGE_DURATIONS}
         rolling_averages[dates[i]] = per_duration
         for duration in const.ROLLING_AVERAGE_DURATIONS:
-            if i < duration:
+            if i + 1 < duration:
                 continue
 
             for data_column in range(4):
                 per_duration[duration].append(
-                    Decimal(np.mean(rates[i - duration:i, data_column]))
+                    Decimal(np.mean(rates[i - duration + 1:i+1, data_column]))
                 )
 
     for date in rolling_averages:

@@ -23,24 +23,24 @@ X_LENGTH = _number_of_rates + len(const.ROLLING_AVERAGE_DURATIONS) * _number_of_
 
 
 
-def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray]:
+def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
     x = []
     y = []
 
     rates = db.execute(
-        'SELECT date, byn, eur, rub, uah FROM nbrb_global WHERE dummy=True and date<%s',
+        'SELECT date, byn, eur, rub, uah FROM nbrb_global WHERE dummy=True and date<=%s ORDER BY date ASC',
         (date,)
     )
     rolling_averages = tuple(db.execute(
-        'SELECT date, duration, eur, rub, uah FROM rolling_average WHERE date<%s ALLOW FILTERING',
+        'SELECT date, duration, eur, rub, uah FROM rolling_average WHERE date<=%s ALLOW FILTERING',
         (date,)
     ))
 
-    rates_as_dict = {x[0]: x[1:] for x in reversed(list(rates))}
+    rates_as_dict = {x[0]: x[1:] for x in list(rates)}
     rolling_averages_as_dict = defaultdict(dict)
 
     for row in rolling_averages:
-        rolling_averages_as_dict[row[0]][row[1]] = row[2:]
+        rolling_averages_as_dict[row.date][row.duration] = row[2:]
 
     for today in rates_as_dict:
         todays_X = np.full(X_LENGTH, None)
@@ -51,12 +51,12 @@ def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray]:
         x.append(todays_X)
         y.append(rates_as_dict[today][0])
 
-    return np.array(x),  np.array(y)
+    return np.array(x),  np.array(y), tuple((x.date() for x in rates_as_dict.keys()))
 
 
-def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.ndarray]:
+def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
     rates = tuple(db.execute(
-        'SELECT date, byn, eur, rub, uah FROM nbrb_global WHERE dummy=True and date<%s ORDER BY date ASC',
+        'SELECT date, byn, eur, rub, uah FROM nbrb_global WHERE dummy=True and date<=%s ORDER BY date ASC',
         (date,)
     ))
 
@@ -70,14 +70,14 @@ def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.nda
 
     y = np.array([x[1] for x in rates])
 
-    return x, y
+    return x, y, tuple((x.date.date() for x in rates))
 
 
 def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolling=True) -> Predictor:
     if use_rolling:
-        x, y = _get_full_X_Y(date)
+        x, y, dates = _get_full_X_Y(date)
     else:
-        x, y = _get_X_Y_with_empty_rolling(date)
+        x, y, dates = _get_X_Y_with_empty_rolling(date)
 
     pre_processor = GlobalToNormlizedDataProcessor()
     pre_processor.fit(x, y)
@@ -96,6 +96,9 @@ def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolli
         predictor.y_train = y
         predictor._rebuild_ridge_model(cache_key='byn-7_' + date.strftime('%Y-%m-%d'))
 
+    predictor.meta = object()
+    predictor.meta.last_day = dates[-1]
+
     return predictor
 
 
@@ -106,21 +109,12 @@ def get_rates_for_date(date: datetime.date):
     )), None)
 
 
-def get_rolling_average_for_date(date: datetime.date):
-    """
-    Not in use at the moment.
-    """
-    data = db.execute(
-        'SELECT duration, eur, rub, uah FROM rolling_average WHERE date=%s',
-        (date,)
-    )
-
-    data = {x[0]: x[1:] for x in data}
-    return tuple(chain(*(data[x] for x in const.ROLLING_AVERAGE_DURATIONS)))
-
-
 def build_and_predict_linear(date: datetime.date) -> float:
-    predictor = build_predictor(date, ridge_weight=RidgeWeight.LINEAR, use_rolling=False)
+    predictor = build_predictor(
+        date - datetime.timedelta(days=1),
+        ridge_weight=RidgeWeight.LINEAR,
+        use_rolling=False
+    )
     rates = get_rates_for_date(date)
     if rates is None:
         raise ValueError(f"No rates for {date}")

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def listen_api():
+    # Here should go declaration of a websocket handler.
     asyncio.create_task(_listen_subscribe_for_predictions())
 
 

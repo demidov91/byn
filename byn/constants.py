@@ -18,7 +18,8 @@ FOREXPF_WORKERS_COUNT = 2
 BCSE_USD_REDIS_KEY = 'USD/BYN'
 FOREXPF_CURRENCIES_TO_LISTEN = 'EUR', 'RUB', 'UAH', 'DXY'
 PUBLISH_PREDICT_REDIS_CHANNEL = 'publish_predict'
-CREATE_PREDICT_REDIS_CHANNEL = 'create_predict'
+PREDICT_COMMANDS_REDIS_CHANNEL = 'create_predict'
+FIX_BCSE_TIMESTAMP = 3  # hours
 
 # Standard deviation for USD/BYN exchange rate during a day.
 STD_USD_BYN = 0.0016
