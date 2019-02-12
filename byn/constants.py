@@ -12,13 +12,12 @@ FOREXPF_LONG_POLL_SSE = 'https://charts.profinance.ru/html/tw/sse'
 REDIS_CACHE_DB = 1
 
 BCSE_UPDATE_INTERVAL = 15       # seconds
-PREDICT_UPDATE_INTERVAL = 1     # seconds
+PREDICT_UPDATE_INTERVAL = 5     # seconds
 BCSE_LAST_OPERATION_COLOR = '#7cb5ec'
 FOREXPF_WORKERS_COUNT = 2
 BCSE_USD_REDIS_KEY = 'USD/BYN'
 FOREXPF_CURRENCIES_TO_LISTEN = 'EUR', 'RUB', 'UAH', 'DXY'
 PUBLISH_PREDICT_REDIS_CHANNEL = 'publish_predict'
-PREDICT_COMMANDS_REDIS_CHANNEL = 'create_predict'
 FIX_BCSE_TIMESTAMP = 3  # hours
 
 # Standard deviation for USD/BYN exchange rate during a day.

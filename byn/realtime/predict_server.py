@@ -67,10 +67,14 @@ async def run():
                 break
 
             elif command == PredictCommand.NEW_BCSE:
+                bcse_data = np.array([
+                    (ts // 1000, rate) for ts, rate in message['data']
+                ], dtype=np.dtype(object))
+
                 set_active_bcse(
                     predictor=predictor,
                     bcse_converter=bcse_converter,
-                    bcse_pairs=message['data'],
+                    bcse_pairs=bcse_data,
                     rolling_average=rolling_average,
                 )
 
@@ -98,6 +102,7 @@ def set_active_bcse(
         logger.debug('Empty bcse data. Skipping.')
         return
 
+    logger.debug('Bcse data to set: %s', bcse_pairs)
     bcse_converter.update(bcse_pairs)
 
     open_timestamp = bcse_pairs[0][0]

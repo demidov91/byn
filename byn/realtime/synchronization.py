@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Optional
+from typing import Optional, Union
 from dataclasses import asdict
 from decimal import Decimal
 
@@ -49,7 +49,11 @@ async def mark_as_ready(thread_name: str):
     logger.debug('%s is marked as ready.', thread_name)
 
 
-async def send_predictor_command(redis: Redis, command: PredictCommand, data: Optional[dict]=None):
+async def send_predictor_command(
+        redis: Redis,
+        command: PredictCommand,
+        data: Optional[Union[dict, list]]=None
+):
     await redis.rpush(PREDICTOR_COMMAND_QUEUE, json.dumps({
         'command': command.value,
         'data': data,

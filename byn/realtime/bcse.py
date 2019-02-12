@@ -16,7 +16,11 @@ import byn.constants as const
 from byn.cassandra_db import insert_bcse_async, get_bcse_in
 from byn.datatypes import BcseData, PredictCommand
 from byn.utils import always_on_coroutine, create_redis
-from byn.realtime.synchronization import mark_as_ready, BCSE as BCSE_IS_READY
+from byn.realtime.synchronization import (
+    mark_as_ready,
+    BCSE as BCSE_IS_READY,
+    send_predictor_command,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -140,7 +144,7 @@ async def _extract_and_publish(today, current_records, redis, client):
         return
 
     if len(new_data) > 0:
-        asyncio.create_task(_notify_about_new_bcse(redis))
+        asyncio.create_task(_notify_about_new_bcse(redis, data))
 
     for r in results:
         try:
@@ -202,8 +206,8 @@ async def _publish_bcse_in_redis(
 
 
 @always_on_coroutine
-async def _notify_about_new_bcse(redis: Redis):
-    await redis.publish(const.PREDICT_COMMANDS_REDIS_CHANNEL, PredictCommand.NEW_BCSE.value)
+async def _notify_about_new_bcse(redis: Redis, data: List[List]):
+    await send_predictor_command(redis, command=PredictCommand.NEW_BCSE, data=data)
 
 
 def is_holiday(date: datetime.date) -> bool:
