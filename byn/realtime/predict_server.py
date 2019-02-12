@@ -13,10 +13,7 @@ from byn.predict_utils import build_predictor
 from byn.predict.predictor import RidgeWeight, Predictor
 from byn.predict.utils import build_trust_array
 from byn.datatypes import LocalRates, PredictCommand
-from byn.cassandra_db import (
-    get_plain_rolling_average_by_date,
-    get_bcse_in
-)
+from byn.cassandra_db import get_bcse_in
 from byn.predict.utils import ignore_containing_nan
 from byn.realtime.synchronization import (
     wait_for_data_threads,
@@ -40,8 +37,8 @@ async def run():
 
         logger.debug('Creating predictor...')
 
-        predictor = build_predictor(today, ridge_weight=RidgeWeight.LINEAR, use_rolling=True)
-        rolling_average = get_plain_rolling_average_by_date(predictor.meta.last_date)
+        predictor = build_predictor(today, ridge_weight=RidgeWeight.POWER, use_rolling=True)
+        rolling_average = predictor.meta.last_rolling_average
 
         logger.debug('Predictor is created.')
 

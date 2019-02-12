@@ -26,7 +26,7 @@ class BcseConverter:
         start_dt = datetime.datetime.fromtimestamp(new_bcse[0][0])
 
         external_live_data = get_external_rate_live(start_dt=start_dt)
-        external_historical_data = get_external_rate(start_dt=start_dt)
+        external_historical_data = get_external_rate(start_dt=start_dt - datetime.timedelta(minutes=30))
         external_rates_extractor = RatesDetailedExtractor(
             _join_external_rates(external_live_data, external_historical_data)
         )
@@ -54,7 +54,7 @@ def _join_external_rates(one, two):
 
     return {
         currency: np.array(tuple(
-            sorted(chain(one[currency], two[currency]), key=lambda x: x[0])
+            sorted(chain(one.get(currency, ()), two.get(currency, ())), key=lambda x: x[0])
         ))
         for currency in currencies
     }

@@ -8,8 +8,8 @@ from byn.datatypes import LocalRates
 
 class OneRateDetailedExtractor:
     def __init__(self, pairs: np.ndarray):
-        self._rates = pairs[:,0]
-        self._timestamps = pairs[:, 1]
+        self._timestamps = pairs[:, 0]
+        self._rates = pairs[:,1]
         self.model = interp1d(self._timestamps, self._rates)
 
     def get_by_timestamp(self, timestamp):

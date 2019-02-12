@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from aioredis import Redis
 
-from byn.predict.predictor import PredictionRecord
+from byn.predict.predictor import PredictionRecord, RidgePredictionRecord
 from byn.utils import create_redis, DecimalAwareEncoder
 from byn.datatypes import PredictCommand, LocalRates
 
@@ -66,8 +66,17 @@ async def send_prediction(redis: Redis, record: PredictionRecord, *, ms_timestam
     await redis.rpush(PREDICTION_READY_QUEUE, json.dumps(data, cls=DecimalAwareEncoder))
 
 
-async def receive_next_prediction(redis: Redis, *, timeout: float) -> dict:
-    return json.loads((await redis.blpop(PREDICTION_READY_QUEUE, timeout=timeout))[1])
+async def receive_next_prediction(redis: Redis, *, timeout: int) -> Optional[dict]:
+    """
+    :param redis: connection object.
+    :param timeout: timeout in seconds.
+    :return: full prediction data including *ms_timestamp* field.
+    """
+    data = await redis.blpop(PREDICTION_READY_QUEUE, timeout=timeout)
+    if data is None:
+        return None
+
+    return json.loads(data[1])
 
 
 async def predict_with_timeout(redis: Redis, external_rates: LocalRates, *, timeout: int=500) -> Optional[PredictionRecord]:
@@ -80,14 +89,15 @@ async def predict_with_timeout(redis: Redis, external_rates: LocalRates, *, time
     finish_time = start_time + timeout
 
     while True:
-        time_left = int(finish_time - time.time() * 1000)
-        if time_left < 1:
+        prediction_data = await receive_next_prediction(redis, timeout=1)
+
+        if (prediction_data is None) or (finish_time - time.time() * 1000 < 1):
             logger.info('Got no prediction for %s.', input_data['ms_timestamp'])
             return None
 
-        prediction_data = await receive_next_prediction(redis, timeout=time_left)
         if prediction_data.pop('ms_timestamp') != input_data['ms_timestamp']:
             logger.debug('Ignore old prediction.')
 
         else:
+            prediction_data['ridge_info'] = RidgePredictionRecord(**prediction_data['ridge_info'])
             return PredictionRecord(**prediction_data)

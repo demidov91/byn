@@ -116,7 +116,8 @@ def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.dat
     end_dt = int(end_dt.timestamp() * 1000)
     raw_output = db.execute(
         'SELECT timestamp_operation, rate FROM bcse '
-        'WHERE currency=%s and timestamp_operation>=%s and timestamp_operation<%s',
+        'WHERE currency=%s and timestamp_operation>=%s and timestamp_operation<%s '
+        'ORDER BY timestamp_operation ASC',
         (currency, start_dt, end_dt)
     )
 
@@ -140,7 +141,7 @@ def get_plain_rolling_average_by_date(date: datetime.date) -> Tuple[Decimal]:
 
 def get_external_rate_live(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str, Iterable[list]]:
     end_dt = end_dt or datetime.datetime(2100, 1, 1)
-    currencies = 'eur', 'rub', 'uah', 'dxy'
+    currencies = 'EUR', 'RUB', 'UAH', 'DXY'
 
     data = {}
     rs = []
@@ -160,7 +161,7 @@ def get_external_rate_live(start_dt: datetime.datetime, end_dt: Optional[datetim
             partial(
                 _process_external_rate_live_one_currency,
                 data=data,
-                currency=currency.upper()
+                currency=currency
             )
         ))
 
@@ -174,7 +175,9 @@ def _process_external_rate_live_one_currency(rows, data: dict, currency: str):
     rates = defaultdict(list)
 
     for row in rows:
-        rates[row.timestamp_open].append([row.timestamp_received, Decimal(row.close)])
+        rates[int(row.timestamp_open.timestamp())].append(
+            [int(row.timestamp_received.timestamp()), Decimal(row.close)]
+        )
 
 
     close_times = list(rates.keys())[1:]
@@ -184,8 +187,8 @@ def _process_external_rate_live_one_currency(rows, data: dict, currency: str):
         for time_rate_pair in rates[open_time]:
             if time_rate_pair[0] < open_time:
                 time_rate_pair[0] = open_time
-            elif time_rate_pair[0] >= close_time:
-                time_rate_pair[0] = close_time - datetime.timedelta(seconds=1)
+            elif close_time is not None and time_rate_pair[0] >= close_time:
+                time_rate_pair[0] = close_time - 1
 
     data[currency] = tuple(chain(*rates.values()))
 
@@ -223,6 +226,19 @@ def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.dat
         processed_data[currency] = pairs_to_return
 
     return processed_data
+
+
+def get_accumulated_error(date:datetime.date):
+    record = next(iter(
+        db.execute(
+            'SELECT accumulated_error from trade_date '
+            'WHERE dummy=true and date<=%s and '
+            'accumulated_error<1000000 '    # Not null actually.
+            'LIMIT 1 ALLOW FILTERING',
+            (date, )
+       )
+    ), None)
+    return record and record.accumulated_error
 
 
 def _handle_async_exception(exception: BaseException):

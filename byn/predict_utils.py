@@ -9,7 +9,7 @@ import numpy as np
 import byn.constants as const
 from byn.predict.predictor import Predictor, RidgeWeight
 from byn.predict.processor import GlobalToNormlizedDataProcessor
-from byn.cassandra_db import db
+from byn.cassandra_db import db, get_accumulated_error
 from byn.datatypes import LocalRates
 
 
@@ -86,9 +86,18 @@ def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolli
     pre_processor.fit(x, y)
     x = pre_processor.transform_global_vectorized(x)
 
+    accumulated_error = get_accumulated_error(date)
+    if accumulated_error is None:
+        logger.warning('Got no accumulated error for %s', date)
+        accumulated_error = 0
+
+    _cache_prefix = 'byn-7'
+
     predictor = Predictor(
         pre_processor=pre_processor,
-        ridge_weights=ridge_weight, cache_prefix='byn-4'
+        ridge_weights=ridge_weight,
+        cache_prefix=_cache_prefix,
+        accumulated_ridge_error=float(accumulated_error),
     )
 
     if use_rolling:
@@ -97,9 +106,10 @@ def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolli
     else:
         predictor.x_train = x
         predictor.y_train = y
-        predictor._rebuild_ridge_model(cache_key='byn-7_' + date.strftime('%Y-%m-%d'))
+        predictor._rebuild_ridge_model(cache_key=f'{_cache_prefix}_{date:%Y-%m-%d}')
 
     predictor.meta.last_date = dates[-1]
+    predictor.meta.last_rolling_average = x[-1][3:]
 
     return predictor
 

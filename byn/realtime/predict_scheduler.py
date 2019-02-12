@@ -35,7 +35,7 @@ async def predict_scheduler():
 
             await redis.publish(const.PUBLISH_PREDICT_REDIS_CHANNEL, json.dumps({
                 'input': dataclasses.asdict(input_data),
-                'output': dataclasses.asdict(output_data),
+                'output': dataclasses.asdict(output_data.to_local()),
             }, cls=DecimalAwareEncoder))
 
         await asyncio.sleep(const.PREDICT_UPDATE_INTERVAL)
