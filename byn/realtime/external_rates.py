@@ -13,7 +13,7 @@ from byn.cassandra_db import insert_external_rate_live_async
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
 from byn.utils import always_on_coroutine, create_redis
-from byn.tasks.external_rates import update_all_currencies_async
+from byn.tasks.external_rates import build_task_update_all_currencies
 from byn.tasks.launch import app
 from byn.realtime.synchronization import mark_as_ready, EXTERNAL_LIVE, EXTERNAL_HISTORY
 
@@ -22,13 +22,7 @@ logger = logging.getLogger(__name__)
 forexpf_code_to_currency = {y: x for x, y in CURRENCY_CODES.items()}
 
 
-
-@app.task(retry=True)
-def load_history():
-    (update_all_currencies_async.si() | mark_load_history_ready.si())()
-
-
-@app.task(retry=True)
+@app.task(autoretry_for=(Exception, ))
 def mark_load_history_ready():
     asyncio.run(mark_as_ready(EXTERNAL_HISTORY))
 
@@ -42,7 +36,7 @@ async def listen_forexpf():
         logger.info('Gonna wait for %s seconds for forexpf to start.', wait_for)
         await asyncio.sleep(wait_for)
 
-    load_history.delay()
+    (build_task_update_all_currencies() | mark_load_history_ready.si())()
 
     queue = Queue()
     for _ in range(const.FOREXPF_WORKERS_COUNT):

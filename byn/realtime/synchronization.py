@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import time
 from typing import Optional, Union
 from dataclasses import asdict
@@ -36,7 +37,7 @@ async def wait_for_data_threads():
 
     while True:
         data = await redis.hgetall(WAIT_KEY)
-        if not all(data.values()):
+        if not all(x == b'1' for x in data.values()):
             logger.info('Data threads status: %s', data)
             await asyncio.sleep(1)
         else:
@@ -61,12 +62,25 @@ async def send_predictor_command(
 
 
 async def receive_predictor_command(redis: Redis) -> dict:
-    return json.loads((await redis.blpop(PREDICTOR_COMMAND_QUEUE))[1], parse_float=Decimal)
+    message = None
+
+    while message is None:
+        message = json.loads((await redis.blpop(PREDICTOR_COMMAND_QUEUE))[1], parse_float=Decimal)
+        expires = message['data'].pop('expires', None)
+        if (
+            expires is not None and
+            time.time() * 1000 >= expires
+        ):
+            logger.info('Ignore expired command %s', message.get('command'))
+            message = None
+
+    return message
 
 
-async def send_prediction(redis: Redis, record: PredictionRecord, *, ms_timestamp):
+
+async def send_prediction(redis: Redis, record: PredictionRecord, *, message_guid):
     data = asdict(record)
-    data['ms_timestamp'] = ms_timestamp
+    data['message_guid'] = message_guid
     await redis.rpush(PREDICTION_READY_QUEUE, json.dumps(data, cls=DecimalAwareEncoder))
 
 
@@ -83,23 +97,31 @@ async def receive_next_prediction(redis: Redis, *, timeout: int) -> Optional[dic
     return json.loads(data[1])
 
 
-async def predict_with_timeout(redis: Redis, external_rates: LocalRates, *, timeout: int=500) -> Optional[PredictionRecord]:
-    start_time = int(time.time() * 1000)
-
-    input_data = asdict(external_rates)
-    input_data['ms_timestamp'] = start_time
-    await send_predictor_command(redis, PredictCommand.PREDICT, input_data)
-
+async def predict_with_timeout(redis: Redis, external_rates: LocalRates, *, timeout: float=0.5) -> Optional[PredictionRecord]:
+    start_time = time.time()
     finish_time = start_time + timeout
 
-    while True:
-        prediction_data = await receive_next_prediction(redis, timeout=1)
+    input_data = asdict(external_rates)
+    input_data['message_guid'] = int(start_time * 1000)
+    input_data['expires'] = int(finish_time * 1000)
+    await send_predictor_command(redis, PredictCommand.PREDICT, input_data)
 
-        if (prediction_data is None) or (finish_time - time.time() * 1000 < 1):
-            logger.info('Got no prediction for %s.', input_data['ms_timestamp'])
+    while True:
+        remaining_seconds = finish_time - time.time()
+
+        if remaining_seconds < 0.001:
+            logger.info('Got no prediction for %s.', input_data['message_guid'])
             return None
 
-        if prediction_data.pop('ms_timestamp') != input_data['ms_timestamp']:
+        prediction_data = await receive_next_prediction(
+            redis,
+            timeout=int(math.ceil(remaining_seconds))
+        )
+
+        if prediction_data is None:
+            continue
+
+        if prediction_data.pop('message_guid') != input_data['message_guid']:
             logger.debug('Ignore old prediction.')
 
         else:

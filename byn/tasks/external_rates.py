@@ -5,6 +5,7 @@ Periodical: once a day.
 """
 import datetime
 import json
+import time
 from decimal import Decimal
 
 from celery import group
@@ -20,7 +21,7 @@ RESOLUTIONS = (1, 3, 5, 15, 30, 60, 120)
 client = Session()
 
 
-@app.task
+@app.task(autoretry_for=(Exception, ))
 def extract_one_currency(start_dt: datetime.datetime, currency: str):
     end_dt = datetime.datetime.now()
     data_to_store = []
@@ -44,7 +45,7 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
         json.dump(data_to_store, f)
 
 
-@app.task
+@app.task(autoretry_for=(Exception, ))
 def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
         data = json.load(f, parse_float=Decimal)
@@ -58,14 +59,14 @@ def load_one_currency(currency: str):
 
 
 @app.task
-def update_one_currency_async(currency: str):
+def build_task_update_one_currency(currency: str):
     start_dt = get_last_external_currency_datetime(currency)
-    (extract_one_currency.si(start_dt, currency) | load_one_currency.si(currency))()
+    return extract_one_currency.si(start_dt, currency) | load_one_currency.si(currency)
 
 
 @app.task
-def update_all_currencies_async():
-    group([update_one_currency_async.si(x) for x in forexpf.CURRENCY_CODES.keys()])()
+def build_task_update_all_currencies():
+    return group([build_task_update_one_currency(x) for x in forexpf.CURRENCY_CODES.keys()])
 
 
 def extend_dump_by_forexpf_file(currency, file_path):

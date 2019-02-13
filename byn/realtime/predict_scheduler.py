@@ -29,7 +29,7 @@ async def predict_scheduler():
             values=external_rates,
         )
 
-        output_data = await predict_with_timeout(redis, input_data, timeout=500)
+        output_data = await predict_with_timeout(redis, input_data, timeout=0.5)
         if output_data is not None:
             # insert_prediction_async(input_data, output_data)
 

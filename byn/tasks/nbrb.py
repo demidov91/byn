@@ -9,7 +9,7 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
-from typing import Collection, Dict, Tuple, Iterable
+from typing import Collection, Dict, Tuple, Iterable, Sequence
 
 import numpy as np
 import requests
@@ -21,6 +21,7 @@ from byn import forexpf
 from byn.datatypes import PredictCommand
 from byn.tasks.launch import app
 from byn.tasks.daily_predict import daily_predict
+from byn.tasks.external_rates import build_task_update_all_currencies
 from byn.cassandra_db import (
     get_last_nbrb_rates,
     get_last_nbrb_local_rates,
@@ -55,11 +56,16 @@ CURR_IDS = {
 TRADE_DATES_URL = 'https://banki24.by/exchange/allowed?code=USD'
 
 
+class NoNewNbrbRateError(ValueError):
+    pass
+
+
 @app.task
 def update_nbrb_rates_async():
     return (
+        build_task_update_all_currencies() |
         load_trade_dates.si() |
-        extract_nbrb.s() |
+        extract_nbrb.s(need_last_date=True) |
         load_nbrb.s() |
         celery.group(
             load_nbrb_local.si(),
@@ -75,14 +81,19 @@ def update_nbrb_rates_async():
 
 
 @app.task
-def load_trade_dates():
+def load_trade_dates() -> Sequence[str]:
     dates = client.get(TRADE_DATES_URL).json()
     insert_trade_dates(dates)
     return dates[-50:]
 
 
-@app.task
-def extract_nbrb(last_trade_dates: Collection[str]) -> Iterable[Dict[str, str]]:
+@app.task(
+    retry_backoff=60,
+    retry_backoff_max=32 * 60,
+    autoretry_for=(NoNewNbrbRateError, ),
+    retry_kwargs={'max_retries': 3 * 24 * 2},
+)
+def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Iterable[Dict[str, str]]:
     record = get_last_nbrb_rates()
     if record is None:
         logger.error('No nbrb rates!')
@@ -111,7 +122,15 @@ def extract_nbrb(last_trade_dates: Collection[str]) -> Iterable[Dict[str, str]]:
         } for x in raw_rates
     ]
 
-    return [x for x in formatted_rates if x['Date'] in last_trade_dates]
+    required_nbrb_records = [x for x in formatted_rates if x['Date'] in last_trade_dates]
+    if need_last_date:
+        for record in required_nbrb_records:
+            if record['Date'] == last_trade_dates[-1]:
+                break
+        else:
+            raise NoNewNbrbRateError(last_trade_dates[-1])
+
+    return required_nbrb_records
 
 
 

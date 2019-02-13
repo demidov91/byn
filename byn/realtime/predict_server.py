@@ -59,6 +59,8 @@ async def run():
                 rolling_average=rolling_average,
             )
 
+        logger.debug('Predictor is configured.')
+
         while True:
             message = await receive_predictor_command(redis)
             command = PredictCommand(message['command'])
@@ -79,7 +81,7 @@ async def run():
                 )
 
             elif command == PredictCommand.PREDICT:
-                ms_timestamp = message['data'].pop('ms_timestamp')
+                message_guid = message['data'].pop('message_guid')
                 data = {x: Decimal(message['data'][x]) for x in message['data']}
 
                 local_rates = LocalRates(**data)
@@ -88,7 +90,7 @@ async def run():
                     rolling_average=rolling_average
                 )
 
-                await send_prediction(redis, prediction, ms_timestamp=ms_timestamp)
+                await send_prediction(redis, prediction, message_guid=message_guid)
 
 
 def set_active_bcse(
