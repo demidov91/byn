@@ -175,9 +175,10 @@ def _process_external_rate_live_one_currency(rows, data: dict, currency: str):
     rates = defaultdict(list)
 
     for row in rows:
-        rates[int(row.timestamp_open.timestamp())].append(
-            [int(row.timestamp_received.timestamp()), Decimal(row.close)]
-        )
+        rates[int(row.timestamp_open.replace(tzinfo=datetime.timezone.utc).timestamp())].append([
+            int(row.timestamp_received.replace(tzinfo=datetime.timezone.utc).timestamp()),
+            Decimal(row.close)
+        ])
 
 
     close_times = list(rates.keys())[1:]
@@ -217,10 +218,18 @@ def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.dat
     for currency, rates in raw_data.items():
         rates = tuple(sorted(rates, key=lambda x: x[0]))
 
-        close_times = [x[0] - datetime.timedelta(seconds=1) for x in rates][1:]
+        close_times = [
+            x[0].replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(seconds=1)
+            for x in rates
+        ][1:]
         pairs_to_return = []
         for i in range(len(close_times)):
-            pairs_to_return.append((int(rates[i][0].timestamp()), rates[i][1]))
+            pairs_to_return.append(
+                (
+                    int(rates[i][0].replace(tzinfo=datetime.timezone.utc).timestamp()),
+                    rates[i][1]
+                )
+            )
             pairs_to_return.append((int(close_times[i].timestamp()), rates[i][2]))
 
         processed_data[currency] = pairs_to_return
