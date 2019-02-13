@@ -3,6 +3,7 @@ nbrb official rates.
 
 Periodical: once a day.
 """
+import asyncio
 import datetime
 import json
 import logging
@@ -17,6 +18,7 @@ from sklearn.neighbors import KNeighborsRegressor
 
 import byn.constants as const
 from byn import forexpf
+from byn.datatypes import PredictCommand
 from byn.tasks.launch import app
 from byn.tasks.daily_predict import daily_predict
 from byn.cassandra_db import (
@@ -35,6 +37,8 @@ from byn.cassandra_db import (
     insert_dxy_12MSK,
     insert_rolling_average,
 )
+from byn.utils import create_redis
+from byn.realtime.synchronization import send_predictor_command
 
 
 client = requests.Session()
@@ -65,7 +69,8 @@ def update_nbrb_rates_async():
         celery.group(
             load_rolling_average.si(),
             daily_predict.si(),
-        )
+        ) |
+        notify_predictor.si()
     )()
 
 
@@ -228,6 +233,14 @@ def load_rolling_average():
             if rolling_averages[date][duration]:
                 insert_rolling_average(date, duration, rolling_averages[date][duration])
 
+
+@app.task
+def notify_predictor():
+    async def _notify_predictor():
+        redis = await create_redis()
+        await send_predictor_command(redis, PredictCommand.REBUILD)
+
+    asyncio.run(_notify_predictor())
 
 
 def nbrb_file_to_cassandra():
