@@ -194,47 +194,93 @@ def _process_external_rate_live_one_currency(rows, data: dict, currency: str):
     data[currency] = tuple(chain(*rates.values()))
 
 
-def get_external_rate(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str, Iterable[list]]:
-    end_dt = end_dt or datetime.datetime(2100, 1, 1)
+def get_latest_external_rates(
+        start_dt: datetime.datetime,
+        *,
+        at_least_one: bool=False
+) -> Dict[str, Iterable[list]]:
+    currencies = 'EUR', 'RUB', 'UAH', 'DXY'
 
-    rows = db.execute(
+    correct_data = db.execute_async(
         'SELECT currency, datetime, open, close '
         'FROM external_rate '
-        "WHERE currency in ('EUR', 'RUB', 'UAH', 'DXY') and year in (%s, %s) and "
-        "datetime>=%s and datetime<%s ",
+        f"WHERE currency in ('EUR', 'RUB', 'UAH', 'DXY') and year in (%s, %s) and "
+        "datetime>=%s",
         (
             start_dt.date().year,
-            end_dt.date().year,
+            start_dt.date().year + 1,
             int(start_dt.timestamp() * 1000),
-            int(end_dt.timestamp() * 1000)
         )
     )
 
-    raw_data = defaultdict(list)
-    for row in rows:
-        raw_data[row[0]].append(row[1:])
+    currency_to_rows = defaultdict(list)
+
+    if at_least_one:
+        last_data = get_the_last_external_rates(currencies, end_dt=start_dt)
+        for currency, row in last_data.items():
+            currency_to_rows[currency].append((
+                row.datetime, row.open, row.close
+            ))
+
+    for row in correct_data.result():
+        currency_to_rows[row[0]].append(row[1:])
 
     processed_data = {}
-    for currency, rates in raw_data.items():
-        rates = tuple(sorted(rates, key=lambda x: x[0]))
+    for currency, rates in currency_to_rows.items():
+        rates = tuple(
+            (x[0].replace(tzinfo=datetime.timezone.utc), *x[1:])
+            for x in sorted(rates, key=lambda x: x[0])
+        )
 
         close_times = [
-            x[0].replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(seconds=1)
+            x[0] - datetime.timedelta(seconds=1)
             for x in rates
         ][1:]
         pairs_to_return = []
         for i in range(len(close_times)):
             pairs_to_return.append(
                 (
-                    int(rates[i][0].replace(tzinfo=datetime.timezone.utc).timestamp()),
+                    int(rates[i][0].timestamp()),
                     rates[i][1]
                 )
             )
             pairs_to_return.append((int(close_times[i].timestamp()), rates[i][2]))
 
+        pairs_to_return.append((
+            int(rates[-1][0].timestamp()),
+            rates[-1][1]
+        ))
+
         processed_data[currency] = pairs_to_return
 
     return processed_data
+
+
+def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.datetime):
+    futures = []
+    data = {}
+
+    def _set_data(rows, *, currency):
+        row = max(tuple(rows), key=lambda x: x.datetime)
+        data[currency] = row
+
+    for currency in currencies:
+        futures.append(db.execute_async(
+            "SELECT * FROM external_rate "
+            "WHERE currency=%s and year in (%s, %s) and datetime<%s"
+            "PER PARTITION LIMIT 1 ALLOW FILTERING",
+            (
+                currency,
+                end_dt.year - 1,
+                end_dt.year,
+                int(end_dt.timestamp() * 1000)
+            )
+        ).add_callback(partial(_set_data, currency=currency)))
+
+    for future in futures:
+        future.result()
+
+    return data
 
 
 def get_accumulated_error(date:datetime.date):

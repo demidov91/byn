@@ -10,11 +10,13 @@ class OneRateDetailedExtractor:
     def __init__(self, pairs: np.ndarray):
         self._timestamps = pairs[:, 0]
         self._rates = pairs[:,1]
-        self.model = interp1d(self._timestamps, self._rates)
 
-    def get_by_timestamp(self, timestamp):
+        if len(pairs) > 1:
+            self.model = interp1d(self._timestamps, self._rates)
+
+    def get_by_timestamp(self, timestamp) -> float:
         if timestamp > self._timestamps[-1]:
-            return self._rates[-1]
+            return float(self._rates[-1])
 
         return self.model(timestamp).item()
 

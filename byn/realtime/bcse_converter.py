@@ -5,7 +5,7 @@ from itertools import chain
 import numpy as np
 
 from byn.cassandra_db import (
-    get_external_rate,
+    get_latest_external_rates,
     get_external_rate_live,
 
 )
@@ -23,10 +23,15 @@ class BcseConverter:
 
     def update(self, bcse_pairs):
         new_bcse = [x for x in bcse_pairs if x[0] not in self.resolved_bcse_rates]
+
+        if not new_bcse:
+            logger.debug("Actually, no new bcse data.")
+            return
+
         start_dt = datetime.datetime.fromtimestamp(new_bcse[0][0])
 
         external_live_data = get_external_rate_live(start_dt=start_dt)
-        external_historical_data = get_external_rate(start_dt=start_dt - datetime.timedelta(minutes=30))
+        external_historical_data = get_latest_external_rates(start_dt=start_dt, at_least_one=True)
         external_rates_extractor = RatesDetailedExtractor(
             _join_external_rates(external_live_data, external_historical_data)
         )
