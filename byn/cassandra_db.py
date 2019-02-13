@@ -14,7 +14,7 @@ from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 import byn.constants as const
-from byn.datatypes import ExternalRateData, BcseData, PredictOutput, LocalRates
+from byn.datatypes import ExternalRateData, BcseData, LocalRates
 from byn.predict.predictor import PredictionRecord
 
 

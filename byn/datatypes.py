@@ -58,20 +58,6 @@ class LocalRates:
         return LocalRates(*(x / divider for x in astuple(self)))
 
 
-@dataclasses.dataclass
-class PredictInput:
-    eur: Decimal
-    rub: Decimal
-    uah: Decimal
-    dxy: Decimal
-    usd_byn__ms_rate: Collection[Tuple[int, Decimal]]
-
-
-@dataclasses.dataclass
-class PredictOutput:
-    rate: Decimal
-
-
 class PredictCommand(Enum):
     NEW_BCSE = 'NEW_BCSE'
     REBUILD = 'REBUILD'
