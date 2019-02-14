@@ -66,7 +66,7 @@ async def receive_predictor_command(redis: Redis) -> dict:
 
     while message is None:
         message = json.loads((await redis.blpop(PREDICTOR_COMMAND_QUEUE))[1], parse_float=Decimal)
-        expires = message['data'].pop('expires', None)
+        expires = message.get('data') and message['data'].pop('expires', None)
         if (
             expires is not None and
             time.time() * 1000 >= expires

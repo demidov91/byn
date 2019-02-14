@@ -9,7 +9,7 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
-from typing import Collection, Dict, Tuple, Iterable, Sequence
+from typing import Dict, Tuple, Iterable, Sequence
 
 import numpy as np
 import requests
@@ -21,7 +21,6 @@ from byn import forexpf
 from byn.datatypes import PredictCommand
 from byn.tasks.launch import app
 from byn.tasks.daily_predict import daily_predict
-from byn.tasks.external_rates import build_task_update_all_currencies
 from byn.cassandra_db import (
     get_last_nbrb_rates,
     get_last_nbrb_local_rates,
@@ -63,7 +62,6 @@ class NoNewNbrbRateError(ValueError):
 @app.task
 def update_nbrb_rates_async():
     return (
-        build_task_update_all_currencies() |
         load_trade_dates.si() |
         extract_nbrb.s(need_last_date=True) |
         load_nbrb.s() |

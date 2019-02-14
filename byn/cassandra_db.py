@@ -435,8 +435,11 @@ def insert_prediction_async(
         bcse_trusted_global: Sequence[Sequence],
         prediction: PredictionRecord
 ):
-    bcse_full = _ndarray_to_tuple_of_tuples(bcse_full)
-    bcse_trusted_global = _ndarray_to_tuple_of_tuples(bcse_trusted_global)
+    if bcse_full is not None:
+        bcse_full = _ndarray_to_tuple_of_tuples(bcse_full)
+
+    if bcse_trusted_global is not None:
+        bcse_trusted_global = _ndarray_to_tuple_of_tuples(bcse_trusted_global)
 
     db.execute_async(
         'INSERT into prediction (date, timestamp, external_rates, bcse_full, bcse_trusted_global, prediction) '

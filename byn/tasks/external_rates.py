@@ -58,15 +58,18 @@ def load_one_currency(currency: str):
     insert_external_rates(currency, data)
 
 
-@app.task
 def build_task_update_one_currency(currency: str):
     start_dt = get_last_external_currency_datetime(currency)
     return extract_one_currency.si(start_dt, currency) | load_one_currency.si(currency)
 
 
-@app.task
 def build_task_update_all_currencies():
     return group([build_task_update_one_currency(x) for x in forexpf.CURRENCY_CODES.keys()])
+
+
+@app.task
+def update_all_currencies_async():
+    build_task_update_all_currencies()()
 
 
 def extend_dump_by_forexpf_file(currency, file_path):

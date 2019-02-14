@@ -23,6 +23,10 @@ app.conf.beat_schedule = {
         'task': 'byn.tasks.nbrb.update_nbrb_rates_async',
         'schedule': crontab(minute=0, hour=14, day_of_week='mon-fri'),
     },
+    'update-external-rates': {
+        'task': 'byn.tasks.external_rates.update_all_currencies_async',
+        'schedule': crontab(minute=0, hour=1),
+    },
     'backup': {
         'task': 'byn.tasks.backup.backup_async',
         'schedule': crontab(minute=30, hour=1),
