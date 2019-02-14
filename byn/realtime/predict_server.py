@@ -37,7 +37,7 @@ async def run():
 
         logger.debug('Creating predictor...')
 
-        predictor = build_predictor(today, ridge_weight=RidgeWeight.POWER, use_rolling=True)
+        predictor = build_predictor(today, use_rolling=True)
         rolling_average = predictor.meta.last_rolling_average
 
         logger.debug('Predictor is created.')

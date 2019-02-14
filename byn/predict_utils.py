@@ -73,7 +73,7 @@ def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.nda
     return x, y, tuple((x.date.date() for x in rates))
 
 
-def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolling=True) -> Predictor:
+def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
     if use_rolling:
         x, y, dates = _get_full_X_Y(date)
     else:
@@ -95,7 +95,6 @@ def build_predictor(date: datetime.date, *, ridge_weight: RidgeWeight, use_rolli
 
     predictor = Predictor(
         pre_processor=pre_processor,
-        ridge_weights=ridge_weight,
         cache_prefix=_cache_prefix,
         accumulated_ridge_error=float(accumulated_error),
     )
@@ -124,7 +123,6 @@ def get_rates_for_date(date: datetime.date):
 def build_and_predict_linear(date: datetime.date) -> float:
     predictor = build_predictor(
         date - datetime.timedelta(days=1),
-        ridge_weight=RidgeWeight.LINEAR,
         use_rolling=False
     )
     rates = get_rates_for_date(date)
