@@ -206,8 +206,14 @@ async def _publish_bcse_in_redis(
 
 
 @always_on_coroutine
-async def _notify_about_new_bcse(redis: Redis, data: List[List]):
-    await send_predictor_command(redis, command=PredictCommand.NEW_BCSE, data=data)
+async def _notify_about_new_bcse(redis: Redis, data: List[Sequence]):
+    await send_predictor_command(
+        redis,
+        command=PredictCommand.NEW_BCSE,
+        data={
+            'rates': data
+        }
+    )
 
 
 def is_holiday(date: datetime.date) -> bool:

@@ -10,7 +10,7 @@ import numpy as np
 
 from byn.utils import always_on_coroutine, create_redis
 from byn.predict_utils import build_predictor
-from byn.predict.predictor import RidgeWeight, Predictor
+from byn.predict.predictor import Predictor
 from byn.predict.utils import build_trust_array
 from byn.datatypes import LocalRates, PredictCommand
 from byn.cassandra_db import get_bcse_in
@@ -70,7 +70,7 @@ async def run():
 
             elif command == PredictCommand.NEW_BCSE:
                 bcse_data = np.array([
-                    (ts // 1000, rate) for ts, rate in message['data']
+                    (ts // 1000, rate) for ts, rate in message['data']['rates']
                 ], dtype=np.dtype(object))
 
                 set_active_bcse(

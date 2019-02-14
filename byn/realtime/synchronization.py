@@ -53,7 +53,7 @@ async def mark_as_ready(thread_name: str):
 async def send_predictor_command(
         redis: Redis,
         command: PredictCommand,
-        data: Optional[Union[dict, list]]=None
+        data: Optional[dict]=None
 ):
     await redis.rpush(PREDICTOR_COMMAND_QUEUE, json.dumps({
         'command': command.value,
