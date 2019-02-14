@@ -216,6 +216,12 @@ def run(table: str, path: str, override: str):
             decimal_columns=['open', 'close', 'low', 'high'],
             int_columns=['volume', 'year'],
         )
+    elif table == 'prediction':
+        _restore_from_csv_data(
+            table,
+            data,
+            datetime_columns=['timestamp'],
+        )
 
     else:
         logger.info('Restoring %s dump without pre-processing.', table)

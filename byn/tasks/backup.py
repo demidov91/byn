@@ -33,6 +33,10 @@ CASSANDRA_BACKUP_TABLES = (
         'nbrb_global',
         ('dummy', 'date', 'dxy', )
     ),
+    (
+        'prediction',
+        ('date', 'timestamp', 'external_rates', 'bcse_full', 'bcse_trusted_global', 'prediction')
+    )
 )
 
 

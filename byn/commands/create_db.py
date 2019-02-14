@@ -86,7 +86,7 @@ def run():
     db.execute('CREATE TABLE IF NOT EXISTS prediction('
                'date date, ' 
                'timestamp timestamp, '
-               'external_rates map<varchar,decimal> , '
+               'external_rates varchar , '
                'bcse_full varchar, '
                'bcse_trusted_global varchar, '
                'prediction varchar, '

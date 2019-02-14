@@ -448,7 +448,7 @@ def insert_prediction_async(
         {
             'date': datetime.datetime.fromtimestamp(timestamp // 1000).date(),
             'timestamp': timestamp,
-            'external_rates': external_rates,
+            'external_rates': json.dumps(external_rates, cls=DecimalAwareEncoder),
             'bcse_full': json.dumps(bcse_full, cls=DecimalAwareEncoder),
             'bcse_trusted_global': json.dumps(bcse_trusted_global, cls=DecimalAwareEncoder),
             'prediction': json.dumps(asdict(prediction), cls=DecimalAwareEncoder),
