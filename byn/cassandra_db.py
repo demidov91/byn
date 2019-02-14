@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 import threading
@@ -14,8 +15,9 @@ from cassandra.cluster import Cluster, NoHostAvailable, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 import byn.constants as const
-from byn.datatypes import ExternalRateData, BcseData, LocalRates
+from byn.datatypes import ExternalRateData, BcseData
 from byn.predict.predictor import PredictionRecord
+from byn.utils import DecimalAwareEncoder
 
 
 logger = logging.getLogger(__name__)
@@ -425,8 +427,34 @@ def insert_bcse_async(data: Iterable[BcseData], **kwargs):
     )
 
 
-def insert_prediction_async(input_data: LocalRates, output_data: PredictionRecord):
-    raise NotImplementedError
+def insert_prediction_async(
+        *,
+        timestamp: int,
+        external_rates: Dict[str, str],
+        bcse_full: Sequence[Sequence],
+        bcse_trusted_global: Sequence[Sequence],
+        prediction: PredictionRecord
+):
+    bcse_full = _ndarray_to_tuple_of_tuples(bcse_full)
+    bcse_trusted_global = _ndarray_to_tuple_of_tuples(bcse_trusted_global)
+
+    db.execute_async(
+        'INSERT into prediction (date, timestamp, external_rates, bcse_full, bcse_trusted_global, prediction) '
+        'VALUES (%(date)s, %(timestamp)s, %(external_rates)s, %(bcse_full)s, %(bcse_trusted_global)s, %(prediction)s) '
+        'USING TTL 5184000',    # 60 days
+        {
+            'date': datetime.datetime.fromtimestamp(timestamp // 1000).date(),
+            'timestamp': timestamp,
+            'external_rates': external_rates,
+            'bcse_full': json.dumps(bcse_full, cls=DecimalAwareEncoder),
+            'bcse_trusted_global': json.dumps(bcse_trusted_global, cls=DecimalAwareEncoder),
+            'prediction': json.dumps(asdict(prediction), cls=DecimalAwareEncoder),
+        }
+    ).add_errback(_handle_async_exception)
+
+
+def _ndarray_to_tuple_of_tuples(numpy_array):
+    return tuple(tuple(row) for row in numpy_array)
 
 
 def insert_rolling_average(date: datetime.date, duration: int, data: Sequence[Decimal]):

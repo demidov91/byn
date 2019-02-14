@@ -83,6 +83,16 @@ def run():
                'PRIMARY KEY (currency, timestamp_operation)'
                ') WITH CLUSTERING ORDER BY (timestamp_operation DESC)')
 
+    db.execute('CREATE TABLE IF NOT EXISTS prediction('
+               'date date, ' 
+               'timestamp timestamp, '
+               'external_rates map<varchar,decimal> , '
+               'bcse_full varchar, '
+               'bcse_trusted_global varchar, '
+               'prediction varchar, '
+               'PRIMARY KEY (date, timestamp)'
+               ') WITH CLUSTERING ORDER BY (timestamp ASC)')
+
 
 
 if __name__ == '__main__':
