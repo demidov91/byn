@@ -41,7 +41,7 @@ services:
       - CASSANDRA_SEEDS=cassandra_2
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
-      - byn.dzmitry.cassandra_1:/var/lib/cassandra
+      - ./mount/cassandra_1:/var/lib/cassandra
 
   cassandra_2:
     image: "cassandra:3.11"
@@ -51,8 +51,4 @@ services:
       - CASSANDRA_SEEDS=cassandra_1
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
-      - byn.dzmitry.cassandra_2:/var/lib/cassandra
-
-volumes:
-  byn.dzmitry.cassandra_1:
-  byn.dzmitry.cassandra_2:
+      - ./mount/cassandra_2:/var/lib/cassandra

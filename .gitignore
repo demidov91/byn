@@ -6,4 +6,5 @@ celerybeat-schedule
 
 data/
 byn/predict/
-
+mount/*
+!mount/.empty
