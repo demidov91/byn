@@ -31,12 +31,13 @@ def mark_load_history_ready():
 async def listen_forexpf():
     current_dt = datetime.datetime.now()
 
+    (build_task_update_all_currencies() | mark_load_history_ready.si())()
+
     if not _forexpf_works(current_dt):
+        await mark_as_ready(EXTERNAL_LIVE)
         wait_for = _get_time_to_monday(current_dt)
         logger.info('Gonna wait for %s seconds for forexpf to start.', wait_for)
         await asyncio.sleep(wait_for)
-
-    (build_task_update_all_currencies() | mark_load_history_ready.si())()
 
     queue = Queue()
     for _ in range(const.FOREXPF_WORKERS_COUNT):

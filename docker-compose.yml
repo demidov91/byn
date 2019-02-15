@@ -16,6 +16,9 @@ services:
       - CASSANDRA_PORT=9042
       - REDIS_CACHE_HOST=redis
 
+    depends_on:
+      - celery
+
   redis:
     image: "redis:5-alpine3.8"
     ports:
@@ -39,6 +42,10 @@ services:
       - REDIS_CACHE_HOST=redis
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    depends_on:
+      - cassandra_1
+      - cassandra_2
+      - redis
 
   cassandra_1:
     image: "cassandra:3.11"

@@ -80,6 +80,7 @@ async def run():
                     local_rates,
                     rolling_average=rolling_average
                 )
+                prediction.timestamp = int(datetime.datetime.now().timestamp())
 
                 await send_prediction(redis, prediction, message_guid=message_guid)
 

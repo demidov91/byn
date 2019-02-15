@@ -1,5 +1,6 @@
 .idea
 .env
+.vscode
 __pycache__
 celerybeat-schedule
 *.ipynb
