@@ -1,13 +1,12 @@
-FROM python:3.7-alpine
+FROM python:3.7-stretch
 
 ENV TZ=Europe/Minsk
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 COPY byn /byn
+RUN mkdir -p /data/ridge_cache
 
-RUN apk update && apk upgrade && \
-    apk add --no-cache bash git musl-dev gcc
 
 RUN pip install -r /byn/requirements/app.txt
 
-CMD ["python", "-m", "launch.py"]
+CMD ["python", "-m", "byn.realtime.launch"]

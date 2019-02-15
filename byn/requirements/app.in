@@ -1,3 +1,13 @@
+# Launch redis tasks.
+-e git+https://github.com/celery/celery@cd6c7444cadbdaaccca14a986e7e1b3330c33024#egg=celery
+redis
+
+# Run predictor.
+scikit-learn
+
+# Communicate with db-s
 cassandra-driver
 aioredis
+
+# Communicate with api-s
 aiohttp

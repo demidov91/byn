@@ -10,8 +10,11 @@ services:
     volumes:
       - ./byn/:/byn/:ro
     environment:
-      - CASSANDRA_HOSTS=${CASSANDRA_HOSTS:-cassandra_1,cassandra_2}
-      - CASSANDRA_PORT=${CASSANDRA_PORT}
+      - CELERY_BROKER_URL=redis://redis
+      - CELERY_RESULT_BACKEND=redis://redis
+      - CASSANDRA_HOSTS=cassandra_1,cassandra_2
+      - CASSANDRA_PORT=9042
+      - REDIS_CACHE_HOST=redis
 
   redis:
     image: "redis:5-alpine3.8"
@@ -28,10 +31,14 @@ services:
     volumes:
       - ./byn/:/byn/:ro
     environment:
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
-      - CASSANDRA_HOSTS=${CASSANDRA_HOSTS:-cassandra_1,cassandra_2}
-      - CASSANDRA_PORT=${CASSANDRA_PORT}
+      - CELERY_BROKER_URL=redis://redis
+      - CELERY_RESULT_BACKEND=redis://redis
+      - CASSANDRA_HOSTS=cassandra_1,cassandra_2
+      - CASSANDRA_PORT=9042
+      - C_FORCE_ROOT=true
+      - REDIS_CACHE_HOST=redis
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
   cassandra_1:
     image: "cassandra:3.11"

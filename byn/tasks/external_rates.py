@@ -5,11 +5,9 @@ Periodical: once a day.
 """
 import datetime
 import json
-import time
 from decimal import Decimal
 
 from celery import group
-from requests import Session
 
 from byn import constants as const
 from byn import forexpf
@@ -18,7 +16,6 @@ from byn.tasks.launch import app
 
 
 RESOLUTIONS = (1, 3, 5, 15, 30, 60, 120)
-client = Session()
 
 
 @app.task(autoretry_for=(Exception, ))

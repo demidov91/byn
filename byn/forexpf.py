@@ -4,10 +4,7 @@ from collections import OrderedDict
 from decimal import Decimal
 from typing import Sequence, Optional, List
 
-import requests
-
 logger = logging.getLogger(__name__)
-client = requests.Session()
 
 
 CURRENCY_CODES = {
@@ -34,6 +31,9 @@ def get_data(
                f'resolution={resolution}&' \
                f'from={int(start_dt.timestamp())}&' \
                f'to={int(end_dt.timestamp())}'
+
+    import requests
+    client = requests.Session()
 
     return client.get(data_url).json(parse_float=Decimal)
 

@@ -1,7 +1,10 @@
 -r app.in
--e git+https://github.com/celery/celery@cd6c7444cadbdaaccca14a986e7e1b3330c33024#egg=celery
+
+# Celery monitor.
 flower
-redis
+
+# Call api-s in non-async environment.
 requests
-scikit-learn
+
+# Upload backups on s3.
 boto3

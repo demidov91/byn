@@ -6,7 +6,6 @@ EXTERNAL_RATE_DATA = 'data/forexpf-%s.json'
 RIDGE_CACHE_FOLDER = 'data/ridge_cache/'
 
 BACKUP_BUCKET = 'byn-dzmitry-by-backup'
-NBRB_BACKUP_PATH = '/tmp/nbrb.backup.csv.gz'
 
 FOREXPF_LONG_POLL_SSE = 'https://charts.profinance.ru/html/tw/sse'
 REDIS_CACHE_DB = 1
