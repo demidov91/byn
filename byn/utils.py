@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import os
+import time
 from decimal import Decimal
 from enum import Enum
 from functools import wraps
@@ -18,16 +19,15 @@ def always_on_coroutine(coro):
     @wraps(coro)
     async def  wrapper(*args, **kwargs):
         retry_counter = 0
-        has_finished_without_an_error = False
 
-        while not has_finished_without_an_error:
+        while True:
             if retry_counter > 0:
                 logger.info('Trying to restart %s', coro)
 
             start_time = datetime.datetime.now()
 
             try:
-                await coro(*args, **kwargs)
+                return await coro(*args, **kwargs)
             except asyncio.CancelledError as e:
                 raise e
 
@@ -47,8 +47,40 @@ def always_on_coroutine(coro):
 
                 await asyncio.sleep(wait_for_before_restart)
 
-            else:
-                has_finished_without_an_error = True
+    return wrapper
+
+
+def always_on_sync(func):
+    @wraps(func)
+    def  wrapper(*args, **kwargs):
+        retry_counter = 0
+
+        while True:
+            if retry_counter > 0:
+                logger.info('Trying to restart %s', func.__name__)
+
+            start_time = datetime.datetime.now()
+
+            try:
+                return func(*args, **kwargs)
+            except KeyboardInterrupt as e:
+                raise e
+
+            except:
+                current_time = datetime.datetime.now()
+                if current_time - start_time < datetime.timedelta(seconds=10):
+                    retry_counter += 1
+                else:
+                    retry_counter = 1
+
+                wait_for_before_restart = 2 ** (retry_counter - 1) if retry_counter < 10 else 8 * 60
+
+                logger.exception(
+                    'Unexpected exception while running %s. Restarting in %s seconds...',
+                    func, wait_for_before_restart
+                )
+
+                time.sleep(wait_for_before_restart)
 
     return wrapper
 

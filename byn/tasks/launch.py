@@ -21,7 +21,7 @@ app.conf['enable_utc'] = False
 app.conf.beat_schedule = {
     'update-nbrb': {
         'task': 'byn.tasks.nbrb.update_nbrb_rates_async',
-        'schedule': crontab(minute=0, hour=14, day_of_week='mon-fri'),
+        'schedule': crontab(minute=0, hour=14),
     },
     'update-external-rates': {
         'task': 'byn.tasks.external_rates.update_all_currencies_async',

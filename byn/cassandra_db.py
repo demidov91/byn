@@ -11,13 +11,13 @@ from itertools import chain
 from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
 
 from celery.signals import worker_process_init, worker_process_shutdown
-from cassandra.cluster import Cluster, NoHostAvailable, Session
+from cassandra.cluster import Cluster, Session
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 import byn.constants as const
 from byn.datatypes import ExternalRateData, BcseData
 from byn.predict.predictor import PredictionRecord
-from byn.utils import DecimalAwareEncoder
+from byn.utils import DecimalAwareEncoder, always_on_sync
 
 
 logger = logging.getLogger(__name__)
@@ -26,22 +26,19 @@ CASSANDRA_HOSTS = os.environ['CASSANDRA_HOSTS'].split(',')
 thread_local = threading.local()
 
 
+@always_on_sync
 def create_cassandra_session():
-    try:
-        cluster = Cluster(
-            CASSANDRA_HOSTS,
-            port=os.environ['CASSANDRA_PORT'],
-            load_balancing_policy=WhiteListRoundRobinPolicy(hosts=CASSANDRA_HOSTS)
-        )
-        db = cluster.connect()
-        db.execute(
-            "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 2}")
-        db.execute('USE byn')
-    except NoHostAvailable:
-        logger.exception('Couldnt connect to cassandra')
-        return None
-
+    cluster = Cluster(
+        CASSANDRA_HOSTS,
+        port=os.environ['CASSANDRA_PORT'],
+        load_balancing_policy=WhiteListRoundRobinPolicy(hosts=CASSANDRA_HOSTS)
+    )
+    db = cluster.connect()
+    db.execute(
+        "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 2}")
+    db.execute('USE byn')
     return db
+
 
 class PerThreadCassandraSession:
     def __getattr__(self, item):
