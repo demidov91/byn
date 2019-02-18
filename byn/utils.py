@@ -86,10 +86,7 @@ def always_on_sync(func):
 
 
 async def create_redis() -> aioredis.Redis:
-    return await aioredis.create_redis(
-        f'redis://{os.environ["REDIS_CACHE_HOST"]}',
-        db=const.REDIS_CACHE_DB
-    )
+    return await aioredis.create_redis(os.environ["REDIS_URL"], db=const.REDIS_CACHE_DB)
 
 
 class DecimalAwareEncoder(json.JSONEncoder):

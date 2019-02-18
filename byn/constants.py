@@ -11,7 +11,7 @@ FOREXPF_LONG_POLL_SSE = 'https://charts.profinance.ru/html/tw/sse'
 REDIS_CACHE_DB = 1
 
 BCSE_UPDATE_INTERVAL = 15       # seconds
-PREDICT_UPDATE_INTERVAL = 5     # seconds
+PREDICT_UPDATE_INTERVAL = 2     # seconds
 BCSE_LAST_OPERATION_COLOR = '#7cb5ec'
 FOREXPF_WORKERS_COUNT = 2
 BCSE_USD_REDIS_KEY = 'USD/BYN'

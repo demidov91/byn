@@ -3,7 +3,8 @@ services:
   nginx:
     image: "nginx:alpine"
     ports:
-      - 8011:80
+      - ${HOST_MAIN_PORT}:80
+      - ${HOST_FLOWER_PORT}:5555
     volumes:
       - ./html:/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -15,16 +16,14 @@ services:
       context: .
       dockerfile: "./app.Dockerfile"
     image: "dzmitry/byn-app"
-    ports:
-      - "5000:5000"
     volumes:
       - ./byn/:/byn/:ro
     environment:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
+      - REDIS_URL=redis://redis
       - CASSANDRA_HOSTS=cassandra_1,cassandra_2
       - CASSANDRA_PORT=9042
-      - REDIS_CACHE_HOST=redis
 
     depends_on:
       - celery
@@ -32,26 +31,25 @@ services:
   redis:
     image: "redis:5-alpine3.8"
     ports:
-      - "6379:6379"
+      - "${HOST_REDIS_PORT:-6379}:6379"
 
   celery:
     build:
       context: .
       dockerfile: "./celery.Dockerfile"
     image: "dzmitry/byn-celery"
-    ports:
-      - "5555:5555" # flower
     volumes:
       - ./byn/:/byn/:ro
     environment:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
+      - REDIS_URL=redis://redis
       - CASSANDRA_HOSTS=cassandra_1,cassandra_2
       - CASSANDRA_PORT=9042
       - C_FORCE_ROOT=true
-      - REDIS_CACHE_HOST=redis
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - FLOWER_BASIC_AUTH=${FLOWER_BASIC_AUTH}
     depends_on:
       - cassandra_1
       - cassandra_2

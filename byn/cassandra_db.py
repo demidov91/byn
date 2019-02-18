@@ -255,7 +255,7 @@ def get_latest_external_rates(
     return processed_data
 
 
-def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.datetime):
+def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.datetime) -> dict:
     futures = []
     data = {}
 
