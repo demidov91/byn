@@ -205,7 +205,7 @@ def run(table: str, path: str, override: str):
         _restore_from_csv_data(
             table,
             data,
-            decimal_columns=['dxy', 'predicted'],
+            decimal_columns=['dxy'],
             bool_columns=['dummy'],
         )
 
@@ -215,6 +215,12 @@ def run(table: str, path: str, override: str):
             data,
             decimal_columns=['open', 'close', 'low', 'high'],
             int_columns=['volume', 'year'],
+        )
+    elif table == 'bcse':
+        _restore_from_csv_data(
+            table,
+            data,
+            datetime_columns=['timestamp_operation', 'timestamp_received'],
         )
     elif table == 'prediction':
         _restore_from_csv_data(
