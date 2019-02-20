@@ -1,4 +1,4 @@
-version: '3'
+version: '2.2'
 services:
   nginx:
     image: "nginx:alpine"
@@ -27,6 +27,10 @@ services:
 
     depends_on:
       - celery
+    cpus: 0.2
+    mem_limit: 128m
+    memswap_limit: 256m
+
 
   redis:
     image: "redis:5-alpine3.8"
@@ -54,6 +58,10 @@ services:
       - cassandra_1
       - cassandra_2
       - redis
+    cpus: 0.2
+    mem_limit: 128m
+    memswap_limit: 256m
+  
 
   cassandra_1:
     image: "cassandra:3.11"
@@ -64,6 +72,9 @@ services:
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
       - ./mount/cassandra_1:/var/lib/cassandra
+    cpus: 0.2
+    mem_limit: 128m
+    memswap_limit: 512m
 
   cassandra_2:
     image: "cassandra:3.11"
@@ -74,3 +85,6 @@ services:
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
       - ./mount/cassandra_2:/var/lib/cassandra
+    cpus: 0.2
+    mem_limit: 128m
+    memswap_limit: 512m
