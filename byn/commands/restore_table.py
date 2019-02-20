@@ -106,7 +106,7 @@ def _parse_data(
 
     for row in data:
         for i in decimal_columns:
-            row[i] = Decimal(row[i])
+            row[i] = Decimal(row[i]) if row[i] else None
 
         for i in int_columns:
             row[i] = int(row[i])
@@ -232,6 +232,7 @@ def run(table: str, path: str, override: str):
         _restore_from_csv_data(
             table,
             data,
+            bool_columns=['dummy'],
             decimal_columns=['predicted', 'prediction_error', 'accumulated_error'],
         )
 
