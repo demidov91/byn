@@ -228,6 +228,12 @@ def run(table: str, path: str, override: str):
             data,
             datetime_columns=['timestamp'],
         )
+    elif table == 'trade_date':
+        _restore_from_csv_data(
+            table,
+            data,
+            decimal_columns=['predicted', 'prediction_error', 'accumulated_error'],
+        )
 
     else:
         logger.info('Restoring %s dump without pre-processing.', table)
