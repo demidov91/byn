@@ -3,7 +3,6 @@ import datetime
 import gzip
 from typing import Tuple
 
-import boto3
 from celery import group
 
 from byn import constants as const
@@ -50,7 +49,7 @@ def backup_async():
 
 @app.task
 def _create_cassandra_table_backup(table: str, columns: Tuple[str]):
-    data = db.execute(f'SELECT {", ".join(columns)} from {table}')
+    data = db.execute(f'SELECT {", ".join(columns)} from {table}', timeout=120)
     with gzip.open(f'/tmp/{table}.csv.gz', mode='wt') as f:
         writer = csv.writer(f, delimiter=';')
         writer.writerow(columns)
@@ -59,6 +58,8 @@ def _create_cassandra_table_backup(table: str, columns: Tuple[str]):
 
 @app.task
 def _send_cassandra_table_backup_to_s3(table: str):
+    import boto3
+
     s3 = boto3.client('s3')
     s3.upload_file(
         f'/tmp/{table}.csv.gz',

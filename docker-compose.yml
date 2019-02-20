@@ -23,6 +23,7 @@ services:
       - REDIS_URL=redis://redis
       - CASSANDRA_HOSTS=cassandra_1,cassandra_2
       - CASSANDRA_PORT=9042
+      - CASSANDRA_NODE_COUNT=${CASSANDRA_NODE_COUNT:-2}
 
     depends_on:
       - celery
@@ -51,6 +52,7 @@ services:
       - REDIS_URL=redis://redis
       - CASSANDRA_HOSTS=cassandra_1,cassandra_2
       - CASSANDRA_PORT=9042
+      - CASSANDRA_NODE_COUNT=${CASSANDRA_NODE_COUNT:-2}
       - C_FORCE_ROOT=true
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}

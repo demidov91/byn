@@ -35,7 +35,9 @@ def create_cassandra_session():
     )
     db = cluster.connect()
     db.execute(
-        "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 2}")
+        "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = "
+        f"{{'class': 'SimpleStrategy', 'replication_factor': {os.environ['CASSANDRA_NODE_COUNT']}}}"
+    )
     db.execute('USE byn')
     return db
 
