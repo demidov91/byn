@@ -5,6 +5,8 @@ __pycache__
 celerybeat-schedule
 *.ipynb
 
+*.pyc
+
 data/
 byn/predict/
 mount/*

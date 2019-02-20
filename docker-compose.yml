@@ -4,7 +4,6 @@ services:
     image: "nginx:alpine"
     ports:
       - ${HOST_MAIN_PORT}:80
-      - ${HOST_FLOWER_PORT}:5555
     volumes:
       - ./html:/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
@@ -42,6 +41,8 @@ services:
       context: .
       dockerfile: "./celery.Dockerfile"
     image: "dzmitry/byn-celery"
+    ports:
+      - ${HOST_FLOWER_PORT}:5555
     volumes:
       - ./byn/:/byn/:ro
     environment:
@@ -72,8 +73,8 @@ services:
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
       - ./mount/cassandra_1:/var/lib/cassandra
-    cpus: 0.2
-    mem_limit: 128m
+    cpus: 0.5
+    mem_limit: 512m
     memswap_limit: 512m
 
   cassandra_2:
@@ -85,6 +86,6 @@ services:
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
       - ./mount/cassandra_2:/var/lib/cassandra
-    cpus: 0.2
-    mem_limit: 128m
+    cpus: 0.5
+    mem_limit: 512m
     memswap_limit: 512m
