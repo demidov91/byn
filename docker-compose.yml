@@ -72,7 +72,7 @@ services:
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
       - ./mount/cassandra_1:/var/lib/cassandra
-    cpus: 0.1
+    cpus: 0.2
     mem_limit: 128m
     memswap_limit: 512m
 
@@ -85,6 +85,6 @@ services:
       - CASSANDRA_CLUSTER_NAME=byn
     volumes:
       - ./mount/cassandra_2:/var/lib/cassandra
-    cpus: 0.1
+    cpus: 0.2
     mem_limit: 128m
     memswap_limit: 512m
