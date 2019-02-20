@@ -6,15 +6,15 @@ import threading
 from collections import defaultdict
 from dataclasses import asdict
 from decimal import Decimal
-from functools import lru_cache, partial
+from functools import partial
 from itertools import chain
 from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
 
 from celery.signals import worker_process_init, worker_process_shutdown
-from cassandra.cluster import Cluster, Session, NoHostAvailable
+from cassandra import ConsistencyLevel
+from cassandra.cluster import Cluster, Session, NoHostAvailable, EXEC_PROFILE_DEFAULT
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-import byn.constants as const
 from byn.datatypes import ExternalRateData, BcseData
 from byn.predict.predictor import PredictionRecord
 from byn.utils import DecimalAwareEncoder, always_on_sync
@@ -33,6 +33,7 @@ def create_cassandra_session():
         port=os.environ['CASSANDRA_PORT'],
         load_balancing_policy=WhiteListRoundRobinPolicy(hosts=CASSANDRA_HOSTS)
     )
+    cluster.profile_manager.profiles[EXEC_PROFILE_DEFAULT].consistency_level = ConsistencyLevel.ALL
     db = cluster.connect()
     db.execute(
         "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = "
@@ -126,19 +127,6 @@ def get_bcse_in(currency: str, start_dt: datetime.datetime, end_dt: datetime.dat
         (dt.replace(tzinfo=datetime.timezone.utc), rate)
         for dt, rate in raw_output
     )
-
-def get_rolling_average_by_date(date: datetime.date) -> Iterable[Sequence[Decimal]]:
-    return db.execute('SELECT duration, eur, rub, uah FROM rolling_average where date=%s', (date, ))
-
-
-@lru_cache()
-def get_plain_rolling_average_by_date(date: datetime.date) -> Tuple[Decimal]:
-    logger.debug(date)
-    data = get_rolling_average_by_date(date)
-
-    data = {x[0]: x[1:] for x in data}
-    return tuple(chain(*(data[x] for x in const.ROLLING_AVERAGE_DURATIONS)))
-
 
 def get_external_rate_live(start_dt: datetime.datetime, end_dt: Optional[datetime.datetime]=None) -> Dict[str, Iterable[list]]:
     end_dt = end_dt or datetime.datetime(2100, 1, 1)
@@ -463,3 +451,5 @@ def insert_rolling_average(date: datetime.date, duration: int, data: Sequence[De
     db.execute('INSERT into rolling_average (date, duration, eur, rub, uah, dxy) '
                'VALUES (%s, %s, %s, %s, %s, %s)',
                (date, duration, *data))
+
+

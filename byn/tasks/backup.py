@@ -1,6 +1,7 @@
 import csv
 import datetime
 import gzip
+import os
 from typing import Tuple
 
 from celery import group
@@ -35,6 +36,10 @@ CASSANDRA_BACKUP_TABLES = (
     (
         'prediction',
         ('date', 'timestamp', 'external_rates', 'bcse_full', 'bcse_trusted_global', 'prediction')
+    ),
+    (
+        'trade_date',
+        ('dummy', 'date', 'predicted', 'prediction_error', 'accumulated_error'),
     )
 )
 
