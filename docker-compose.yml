@@ -24,6 +24,7 @@ services:
       - CASSANDRA_HOSTS=cassandra_1,cassandra_2
       - CASSANDRA_PORT=9042
       - CASSANDRA_NODE_COUNT=${CASSANDRA_NODE_COUNT:-2}
+      - BACKUP_BUCKET=${BACKUP_BUCKET:-byn-dzmitry-by-backup}
 
     depends_on:
       - celery
@@ -57,6 +58,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - FLOWER_BASIC_AUTH=${FLOWER_BASIC_AUTH}
+      - BACKUP_BUCKET=${BACKUP_BUCKET:-byn-dzmitry-by-backup}
     depends_on:
       - cassandra_1
       - cassandra_2

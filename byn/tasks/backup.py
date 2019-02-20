@@ -68,7 +68,7 @@ def _send_cassandra_table_backup_to_s3(table: str):
     s3 = boto3.client('s3')
     s3.upload_file(
         f'/tmp/{table}.csv.gz',
-        const.BACKUP_BUCKET,
+        os.environ['BACKUP_BUCKET'],
         f'{table}_{datetime.date.today():%Y-%m-%d}.csv.gz'
     )
 

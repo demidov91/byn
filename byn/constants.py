@@ -5,8 +5,6 @@ DXY_12MSK_DARA = 'data/dxy-12MSK.json'
 EXTERNAL_RATE_DATA = 'data/forexpf-%s.json'
 RIDGE_CACHE_FOLDER = 'data/ridge_cache/'
 
-BACKUP_BUCKET = 'byn-dzmitry-by-backup'
-
 FOREXPF_LONG_POLL_SSE = 'https://charts.profinance.ru/html/tw/sse'
 REDIS_CACHE_DB = 1
 
