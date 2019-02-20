@@ -6,7 +6,7 @@ import os
 import time
 from decimal import Decimal
 from enum import Enum
-from functools import wraps
+from functools import wraps, partial
 
 import aioredis
 
@@ -15,7 +15,10 @@ from byn import constants as const
 logger = logging.getLogger(__name__)
 
 
-def always_on_coroutine(coro):
+def always_on_coroutine(coro=None, expected_exceptions=()):
+    if coro is None:
+        return partial(always_on_coroutine, expected_exceptions=expected_exceptions)
+
     @wraps(coro)
     async def  wrapper(*args, **kwargs):
         retry_counter = 0
@@ -31,7 +34,7 @@ def always_on_coroutine(coro):
             except asyncio.CancelledError as e:
                 raise e
 
-            except:
+            except Exception as e:
                 current_time = datetime.datetime.now()
                 if current_time - start_time < datetime.timedelta(seconds=10):
                     retry_counter += 1
@@ -40,17 +43,27 @@ def always_on_coroutine(coro):
 
                 wait_for_before_restart = 2 ** (retry_counter - 1) if retry_counter < 10 else 8 * 60
 
-                logger.exception(
-                    'Unexpected exception while running %s. Restarting in %s seconds...',
-                    coro, wait_for_before_restart
-                )
+                if type(e) in expected_exceptions:
+                    logger.warning(
+                        'Expected error %s while running %s. Restarting in %s seconds...',
+                        type(e).__name__, coro.__name__, wait_for_before_restart
+                    )
+
+                else:
+                    logger.exception(
+                        'Unexpected error while running %s. Restarting in %s seconds...',
+                        coro.__name__, wait_for_before_restart
+                    )
 
                 await asyncio.sleep(wait_for_before_restart)
 
     return wrapper
 
 
-def always_on_sync(func):
+def always_on_sync(func=None, expected_exceptions=()):
+    if func is None:
+        return partial(always_on_sync, expected_exceptions=expected_exceptions)
+
     @wraps(func)
     def  wrapper(*args, **kwargs):
         retry_counter = 0
@@ -66,7 +79,7 @@ def always_on_sync(func):
             except KeyboardInterrupt as e:
                 raise e
 
-            except:
+            except Exception as e:
                 current_time = datetime.datetime.now()
                 if current_time - start_time < datetime.timedelta(seconds=10):
                     retry_counter += 1
@@ -75,10 +88,17 @@ def always_on_sync(func):
 
                 wait_for_before_restart = 2 ** (retry_counter - 1) if retry_counter < 10 else 8 * 60
 
-                logger.exception(
-                    'Unexpected exception while running %s. Restarting in %s seconds...',
-                    func, wait_for_before_restart
-                )
+                if type(e) in expected_exceptions:
+                    logger.warning(
+                        'Expected error %s while running %s. Restarting in %s seconds...',
+                        type(e).__name__, func.__name__, wait_for_before_restart
+                    )
+
+                else:
+                    logger.exception(
+                        'Unexpected error while running %s. Restarting in %s seconds...',
+                        func.__name__, wait_for_before_restart
+                    )
 
                 time.sleep(wait_for_before_restart)
 

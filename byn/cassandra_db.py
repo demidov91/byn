@@ -11,7 +11,7 @@ from itertools import chain
 from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
 
 from celery.signals import worker_process_init, worker_process_shutdown
-from cassandra.cluster import Cluster, Session
+from cassandra.cluster import Cluster, Session, NoHostAvailable
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 import byn.constants as const
@@ -26,7 +26,7 @@ CASSANDRA_HOSTS = os.environ['CASSANDRA_HOSTS'].split(',')
 thread_local = threading.local()
 
 
-@always_on_sync
+@always_on_sync(expected_exceptions=(NoHostAvailable, ))
 def create_cassandra_session():
     cluster = Cluster(
         CASSANDRA_HOSTS,
