@@ -52,7 +52,7 @@ EXTRA_BCSE_WORKDAYS = (
 
 
 def _get_todays_bcse_start(date: datetime.date):
-    return datetime.datetime(date.year, date.month, date.day, 10, 0)
+    return datetime.datetime(date.year, date.month, date.day, 9, 55)
 
 
 def _get_todays_bcse_finish(date: datetime.date):
