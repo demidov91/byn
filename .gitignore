@@ -11,3 +11,4 @@ data/
 byn/predict/
 mount/*
 !mount/.empty
+docker-compose.override.yml
