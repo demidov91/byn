@@ -33,7 +33,7 @@ def create_cassandra_session():
         port=os.environ['CASSANDRA_PORT'],
         load_balancing_policy=WhiteListRoundRobinPolicy(hosts=CASSANDRA_HOSTS)
     )
-    cluster.profile_manager.profiles[EXEC_PROFILE_DEFAULT].consistency_level = ConsistencyLevel.ALL
+    cluster.profile_manager.profiles[EXEC_PROFILE_DEFAULT].consistency_level = ConsistencyLevel.QUORUM
     db = cluster.connect()
     db.execute(
         "CREATE KEYSPACE IF NOT EXISTS byn WITH REPLICATION = "

@@ -60,10 +60,10 @@ class NoNewNbrbRateError(ValueError):
 
 
 @app.task
-def update_nbrb_rates_async():
+def update_nbrb_rates_async(need_last_date=True):
     return (
         load_trade_dates.si() |
-        extract_nbrb.s(need_last_date=True) |
+        extract_nbrb.s(need_last_date=need_last_date) |
         load_nbrb.s() |
         celery.group(
             load_nbrb_local.si(),
