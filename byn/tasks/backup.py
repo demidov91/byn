@@ -13,14 +13,15 @@ from byn.tasks.launch import app
 
 
 CASSANDRA_BACKUP_TABLES = (
-    (
-        'external_rate',
-        ('currency', 'year', 'datetime', 'open', 'close', 'low', 'high', 'volume')
-    ),
-    (
-        'external_rate_live',
-        ('currency', 'timestamp_open', 'volume', 'timestamp_received', 'close', 'writetime(close)', 'ttl(close)')
-    ),
+    # It takes too long ...
+    # (
+    #     'external_rate',
+    #     ('currency', 'year', 'datetime', 'open', 'close', 'low', 'high', 'volume')
+    # ),
+    # (
+    #     'external_rate_live',
+    #     ('currency', 'timestamp_open', 'volume', 'timestamp_received', 'close', 'writetime(close)', 'ttl(close)')
+    # ),
     (
         'bcse',
         ('currency', 'timestamp_operation', 'timestamp_received', 'rate')
