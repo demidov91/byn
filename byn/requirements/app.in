@@ -11,3 +11,6 @@ aioredis
 
 # Communicate with api-s
 aiohttp
+
+# Issue tracking.
+sentry-sdk

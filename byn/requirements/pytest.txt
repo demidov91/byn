@@ -18,7 +18,7 @@ bleach==3.1.0             # via nbconvert
 boto3==1.9.82
 botocore==1.12.82         # via boto3, s3transfer
 cassandra-driver==3.16.0
-certifi==2018.11.29       # via requests
+certifi==2018.11.29       # via requests, sentry-sdk
 chardet==3.0.4            # via aiohttp, requests
 decorator==4.3.0          # via ipython, traitlets
 defusedxml==0.5.0         # via nbconvert
@@ -70,12 +70,13 @@ s3transfer==0.1.13        # via boto3
 scikit-learn==0.20.2
 scipy==1.2.0              # via scikit-learn
 send2trash==1.5.0         # via notebook
+sentry-sdk==0.7.6
 six==1.12.0               # via bleach, cassandra-driver, more-itertools, prompt-toolkit, pytest, python-dateutil, traitlets
 terminado==0.8.1          # via notebook
 testpath==0.4.2           # via nbconvert
 tornado==5.1.1            # via flower, ipykernel, jupyter-client, notebook, terminado
 traitlets==4.3.2          # via ipykernel, ipython, ipywidgets, jupyter-client, jupyter-core, nbconvert, nbformat, notebook, qtconsole
-urllib3==1.24.1           # via botocore, requests
+urllib3==1.24.1           # via botocore, requests, sentry-sdk
 vine==1.2.0               # via amqp
 wcwidth==0.1.7            # via prompt-toolkit
 webencodings==0.5.1       # via bleach
