@@ -9,8 +9,9 @@ import numpy as np
 import byn.constants as const
 from byn.predict.predictor import Predictor, RidgeWeight
 from byn.predict.processor import GlobalToNormlizedDataProcessor
-from byn.cassandra_db import db, get_accumulated_error
+from byn.cassandra_db import get_accumulated_error
 from byn.datatypes import LocalRates
+from byn.hbase_db import db, bytes_to_date, next_date_to_bytes, table, key_part, get_decimal
 
 
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 _number_of_rates = 3
 ROLLING_AVERAGE_LENGTH = len(const.ROLLING_AVERAGE_DURATIONS) * _number_of_rates
 X_LENGTH = _number_of_rates + len(const.ROLLING_AVERAGE_DURATIONS) * _number_of_rates
+EXTERNAL_RATES_COLUMNS = b'rate:eur', b'rate:rub', b'rate:uah'
 
 
 
@@ -27,50 +29,59 @@ def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[da
     x = []
     y = []
 
-    rates = db.execute(
-        'SELECT date, byn, eur, rub, uah FROM nbrb_global WHERE dummy=True and date<=%s ORDER BY date ASC',
-        (date,)
-    )
-    rolling_averages = tuple(db.execute(
-        'SELECT date, duration, eur, rub, uah FROM rolling_average WHERE date<=%s ALLOW FILTERING',
-        (date,)
-    ))
+    with db.connection() as connection:
+        nbrb_table = connection.table('nbrb')
+        rates = nbrb_table.scan(
+            prefix=b'global|',
+            row_stop=next_date_to_bytes(date)
+        )
 
-    rates_as_dict = {x[0]: x[1:] for x in list(rates)}
+        rolling_average_table = connection.table('rolling_average')
+        rolling_averages = rolling_average_table.scan(row_stop=next_date_to_bytes(date))
+
+    rates_as_dict = {}
+    byn_rates = {}
+
+    for key, data in rates:
+        _, date = key.split(b'|')
+        rates_as_dict[date] = [data[x] for x in EXTERNAL_RATES_COLUMNS]
+        byn_rates[date] = data[b'rate:byn']
+
+
     rolling_averages_as_dict = defaultdict(dict)
 
-    for row in rolling_averages:
-        rolling_averages_as_dict[row.date][row.duration] = row[2:]
+    for key, data in rolling_averages:
+        date, duration = key.split(b'|')
+        rolling_averages_as_dict[date][duration] = data.values()
 
     for today in rates_as_dict:
         todays_X = np.full(X_LENGTH, None)
-        todays_X[:3] = rates_as_dict[today][1:]
+        todays_X[:3] = rates_as_dict[today]
         rolling = tuple(chain(*rolling_averages_as_dict[today].values()))
         todays_X[3:3 + len(rolling)] = rolling
 
         x.append(todays_X)
-        y.append(rates_as_dict[today][0])
+        y.append(byn_rates[today])
 
-    return np.array(x),  np.array(y), tuple((x.date() for x in rates_as_dict.keys()))
+    return (
+        np.array(x, dtype='float64'),
+        np.array(y, dtype='float64'),
+        tuple(bytes_to_date(x) for x in rates_as_dict.keys())
+    )
 
 
 def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
-    rates = tuple(db.execute(
-        'SELECT date, byn, eur, rub, uah FROM nbrb_global WHERE dummy=True and date<=%s ORDER BY date ASC',
-        (date,)
-    ))
+    with table('nbrb') as nbrb_table:
+        keys, rates = zip(*nbrb_table.scan(prefix=b'global|', row_stop=next_date_to_bytes(date)))
 
-    for i in range(1, len(rates) - 1):
-        if rates[i-1] > rates[i]:
-            raise ValueError()
 
-    x = np.full((len(rates), X_LENGTH), None)
+    x = np.full((len(rates), X_LENGTH), None, dtype='float64')
     for x_row, rate_row in zip(x, rates):
-        x_row[:3] = rate_row[2:]
+        x_row[:3] = [rate_row[col] for col in EXTERNAL_RATES_COLUMNS]
 
-    y = np.array([x[1] for x in rates])
+    y = np.array([x[b'rate:byn'] for x in rates], dtype='float64')
 
-    return x, y, tuple((x.date.date() for x in rates))
+    return x, y, tuple(bytes_to_date(key_part(x, 1)) for x in keys)
 
 
 def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
@@ -78,9 +89,6 @@ def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
         x, y, dates = _get_full_X_Y(date)
     else:
         x, y, dates = _get_X_Y_with_empty_rolling(date)
-
-    x = np.array(x, dtype='float64')
-    y = np.array(y, dtype='float64')
 
     pre_processor = GlobalToNormlizedDataProcessor()
     pre_processor.fit(x, y)
@@ -113,11 +121,9 @@ def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
     return predictor
 
 
-def get_rates_for_date(date: datetime.date):
-    return next(iter(db.execute(
-        'SELECT eur, rub, uah, dxy FROM nbrb_global WHERE dummy=True and date=%s',
-        (date, )
-    )), None)
+def get_rates_for_date(date: datetime.date) -> dict:
+    with table('nbrb') as nbrb:
+        return nbrb.row(f'global|{date:%Y-%m-%d}'.encode())
 
 
 def build_and_predict_linear(date: datetime.date) -> float:
@@ -126,10 +132,15 @@ def build_and_predict_linear(date: datetime.date) -> float:
         use_rolling=False
     )
     rates = get_rates_for_date(date)
-    if rates is None:
+    if not rates:
         raise ValueError(f"No rates for {date}")
 
-    rates = LocalRates(eur=rates.eur, rub=rates.rub, uah=rates.uah, dxy=rates.dxy)
+    rates = LocalRates(
+        eur=get_decimal(rates, b'rate:eur'),
+        rub=get_decimal(rates, b'rate:rub'),
+        uah=get_decimal(rates, b'rate:uah'),
+        dxy=get_decimal(rates, b'rate:dxy'),
+    )
 
     x = predictor.pre_processor.transform_global(
         rates,

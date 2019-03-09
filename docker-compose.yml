@@ -21,9 +21,10 @@ services:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
       - REDIS_URL=redis://redis
-      - CASSANDRA_HOSTS=cassandra_1,cassandra_2
-      - CASSANDRA_PORT=9042
-      - CASSANDRA_NODE_COUNT=${CASSANDRA_NODE_COUNT:-2}
+#      - CASSANDRA_HOSTS=cassandra_1,cassandra_2
+#      - CASSANDRA_PORT=9042
+#      - CASSANDRA_NODE_COUNT=${CASSANDRA_NODE_COUNT:-2}
+      - HBASE_HOST=${HBASE_HOST:-hbase-master}
       - BACKUP_BUCKET=${BACKUP_BUCKET:-byn-dzmitry-by-backup}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}

@@ -158,7 +158,7 @@ def load_dxy_12MSK() -> Tuple[Iterable]:
 
     timestamps = [[datetime.datetime(x.year, x.month, x.day, 12).timestamp()] for x in dates]
     dates = [x.isoformat() for x in dates]
-    rate_pairs = tuple(zip(dates, [Decimal(x) for x in dxy_regressor.predict(timestamps)]))
+    rate_pairs = tuple(zip(dates, [str(x) for x in dxy_regressor.predict(timestamps)]))
 
     insert_dxy_12MSK(rate_pairs)
 
@@ -265,10 +265,3 @@ def nbrb_file_to_cassandra():
         data = json.load(f)
 
     load_nbrb(data)
-
-
-def dxy_12MSK_to_cassandra():
-    with open(const.DXY_12MSK_DARA, mode='rt') as f:
-        data = json.load(f)
-
-    insert_dxy_12MSK([(x[0], Decimal(x[1])) for x in data])

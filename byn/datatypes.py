@@ -21,8 +21,8 @@ class ExternalRateData:
 @dataclass
 class BcseData:
     currency: str
-    ms_timestamp_operation: int
-    ms_timestamp_received: int
+    timestamp_operation: int
+    timestamp_received: int
     rate: str
 
 

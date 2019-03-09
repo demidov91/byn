@@ -303,13 +303,13 @@ def _execute_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, An
         r.result()
 
 
-def insert_nbrb(data):
+def insert_nbrb_rates(rates: Iterable[dict]):
     _execute_in_parallel(
         'INSERT into nbrb '
         '(dummy, date, usd, eur, rub, uah) '
         'VALUES '
         '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
-        data
+        rates
     )
 
 
@@ -339,14 +339,6 @@ def insert_trade_dates(trade_dates: Collection[str]):
     )
 
 
-def insert_nbrb_rates(rates: Iterable[dict]):
-    _execute_in_parallel(
-        'INSERT into nbrb '
-        '(dummy, date, usd, eur, rub, uah) '
-        'VALUES '
-        '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
-        rates
-    )
 
 
 def insert_dxy_12MSK(data: Iterable[tuple]):
@@ -407,7 +399,7 @@ def insert_bcse_async(data: Iterable[BcseData], **kwargs):
         'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
         'VALUES (%s, %s, %s, %s)',
         [
-            (row.currency, row.ms_timestamp_operation, row.ms_timestamp_received, row.rate)
+            (row.currency, row.timestamp_operation, row.timestamp_received, row.rate)
             for row in data
         ],
         **kwargs

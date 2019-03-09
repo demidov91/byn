@@ -66,7 +66,7 @@ async def run():
 
             elif command == PredictCommand.NEW_BCSE:
                 bcse_data = np.array([
-                    (ts // 1000, rate) for ts, rate in message['data']['rates']
+                    (ts, rate) for ts, rate in message['data']['rates']
                 ], dtype=np.dtype(object))
 
                 todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)

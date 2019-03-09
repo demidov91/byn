@@ -45,12 +45,7 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
 @app.task(autoretry_for=(Exception, ))
 def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
-        data = json.load(f, parse_float=Decimal)
-
-    for row in data:
-        row[0] = datetime.datetime.fromtimestamp(row[0])
-        for i in (1, 2, 3, 4):
-            row[i] = Decimal(row[i])
+        data = json.load(f, parse_float=str)
 
     insert_external_rates(currency, data)
 

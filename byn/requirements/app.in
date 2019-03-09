@@ -6,7 +6,8 @@ redis
 scikit-learn
 
 # Communicate with db-s
-cassandra-driver
+cython
+happybase
 aioredis
 
 # Communicate with api-s
