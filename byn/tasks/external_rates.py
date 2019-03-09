@@ -11,7 +11,8 @@ from celery import group
 
 from byn import constants as const
 from byn import forexpf
-from byn.cassandra_db import insert_external_rates, get_last_external_currency_datetime
+from byn.cassandra_db import get_last_external_currency_datetime
+from byn.hbase_db import insert_external_rates
 from byn.tasks.launch import app
 
 

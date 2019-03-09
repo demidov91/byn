@@ -13,7 +13,8 @@ from aiohttp.client import ClientSession
 from aioredis import Redis
 
 import byn.constants as const
-from byn.cassandra_db import insert_bcse_async, get_bcse_in
+from byn.cassandra_db import get_bcse_in
+from byn.hbase_db import insert_bcse
 from byn.datatypes import BcseData, PredictCommand
 from byn.utils import always_on_coroutine, create_redis
 from byn.realtime.synchronization import (
@@ -138,7 +139,7 @@ async def _extract_and_publish(today, current_records, redis, client):
 
     logger.debug('New bcse data: %s', new_data)
 
-    results = insert_bcse_async(new_data, timeout=1)
+    results = insert_bcse(new_data)
 
     if len(new_data) > 0:
         asyncio.create_task(_notify_about_new_bcse(redis, data))

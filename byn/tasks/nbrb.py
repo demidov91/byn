@@ -30,12 +30,14 @@ from byn.cassandra_db import (
     get_nbrb_gt,
     get_nbrb_local_gt,
     get_nbrb_global_gt,
-    insert_trade_dates,
-    insert_nbrb_rates,
-    insert_nbrb_local,
+)
+from byn.hbase_db import (
     add_nbrb_global,
-    insert_dxy_12MSK,
+    insert_nbrb,
+    insert_nbrb_local,
+    insert_trade_dates,
     insert_rolling_average,
+    insert_dxy_12MSK,
 )
 from byn.utils import create_redis
 from byn.realtime.synchronization import send_predictor_command
@@ -215,7 +217,7 @@ def load_nbrb(rates):
         rates['date'] = date
 
     data = tuple(cass_rates.values())
-    insert_nbrb_rates(data)
+    insert_nbrb(data)
     return data
 
 

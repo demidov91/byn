@@ -14,7 +14,7 @@ from byn.predict.predictor import Predictor
 from byn.predict.utils import build_trust_array
 from byn.datatypes import LocalRates, PredictCommand
 from byn.cassandra_db import get_bcse_in, insert_prediction_async
-from byn.predict.utils import ignore_containing_nan
+from byn.hbase_db import insert_prediction
 from byn.realtime.synchronization import (
     wait_for_data_threads,
     receive_predictor_command,
@@ -84,7 +84,7 @@ async def run():
 
                 await send_prediction(redis, prediction, message_guid=message_guid)
 
-                insert_prediction_async(
+                insert_prediction(
                     timestamp=message_guid,
                     external_rates=data,
                     bcse_full=todays_bcse_config.bcse_full,
