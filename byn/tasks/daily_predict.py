@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from byn.predict_utils import build_and_predict_linear
 from byn.tasks.launch import app
-from byn.hbase_db import bytes_to_date, get_decimal, next_date_to_bytes, db, key_part
+from byn.hbase_db import bytes_to_date, get_decimal, date_to_next_bytes, db, key_part
 
 
 start_prediction_day = datetime.date(2018, 7, 15)
@@ -28,8 +28,7 @@ def daily_predict():
 
         nbrb = connection.table('nbrb')
         key_to_data = nbrb.scan(
-            prefix='global|',
-            row_start=next_date_to_bytes(start_date),
+            row_start=b'global|' + date_to_next_bytes(start_date),
             columns=[b'rate:byn'],
             filter="SingleColumnValueFilter('rate', 'eur', >, '', true) AND "
                    "SingleColumnValueFilter('rate', 'rub', >, '', true) AND "

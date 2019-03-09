@@ -11,7 +11,7 @@ from byn.predict.predictor import Predictor, RidgeWeight
 from byn.predict.processor import GlobalToNormlizedDataProcessor
 from byn.cassandra_db import get_accumulated_error
 from byn.datatypes import LocalRates
-from byn.hbase_db import db, bytes_to_date, next_date_to_bytes, table, key_part, get_decimal
+from byn.hbase_db import db, bytes_to_date, date_to_next_bytes, table, key_part, get_decimal
 
 
 
@@ -32,12 +32,12 @@ def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[da
     with db.connection() as connection:
         nbrb_table = connection.table('nbrb')
         rates = nbrb_table.scan(
-            prefix=b'global|',
-            row_stop=next_date_to_bytes(date)
+            row_start=b'global|',
+            row_stop=b'global|' + date_to_next_bytes(date)
         )
 
         rolling_average_table = connection.table('rolling_average')
-        rolling_averages = rolling_average_table.scan(row_stop=next_date_to_bytes(date))
+        rolling_averages = rolling_average_table.scan(row_stop=date_to_next_bytes(date))
 
     rates_as_dict = {}
     byn_rates = {}
@@ -72,7 +72,12 @@ def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[da
 
 def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
     with table('nbrb') as nbrb_table:
-        keys, rates = zip(*nbrb_table.scan(prefix=b'global|', row_stop=next_date_to_bytes(date)))
+        keys, rates = zip(
+            *nbrb_table.scan(
+                row_start=b'global|',
+                row_stop=b'global|' + date_to_next_bytes(date)
+            )
+        )
 
 
     x = np.full((len(rates), X_LENGTH), None, dtype='float64')

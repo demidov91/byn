@@ -4,9 +4,11 @@ import os
 from contextlib import contextmanager
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Collection, Dict, Iterable, Iterator, Sequence, Tuple
+from typing import Collection, Dict, Iterable, Iterator, Optional, Sequence, Tuple
+from enum import Enum
 
 import happybase
+from happybase.util import bytes_increment
 
 from byn.datatypes import ExternalRateData, BcseData
 from byn.predict.predictor import PredictionRecord
@@ -28,12 +30,12 @@ def next_date_to_string(date: datetime.date) -> str:
     return (date + datetime.timedelta(days=1)).strftime(DATE_FORMAT)
 
 
-def next_date_to_bytes(date: datetime.date) -> bytes:
-    return next_date_to_string(date).encode()
-
-
 def date_to_bytes(date: datetime.date) -> bytes:
     return date.strftime(DATE_FORMAT).encode()
+
+
+def date_to_next_bytes(date: datetime.date) -> bytes:
+    return bytes_increment(date_to_bytes(date))
 
 
 def bytes_to_date(data: bytes) -> datetime.date:
@@ -52,19 +54,74 @@ def get_decimal(row: dict, column: bytes) -> Decimal:
     return Decimal(row[column].decode())
 
 
+class NbrbKind(Enum):
+    OFFICIAL = b'official'
+    LOCAL = b'local'
+    GLOBAL = b'global'
+
+    @property
+    def as_prefix(self):
+        return self.value + b'|'
+
+
+
+############# SELECT ############
+def get_last_nbrb_record(kind: NbrbKind) -> Tuple[bytes, Dict[bytes: bytes]]:
+    with table('nbrb') as nbrb:
+        return next(iter(nbrb.scan(reverse=True, limit=1, row_prefix=kind.as_prefix)), None)
+
+def get_last_nbrb_global_with_rates():
+    with table('nbbr') as nbrb:
+        return next(iter(nbrb.scan(
+            reverse=True,
+            limit=1,
+            row_prefix=NbrbKind.GLOBAL.as_prefix,
+            filter="SingleColumnValueFilter('rate', 'byn', >, '', true)"
+        )), None)
+
+
+def get_last_external_currency_datetime(currency: str) -> datetime.datetime:
+    with table('external_rate') as external_rate:
+        data = next(external_rate.scan(reverse=True, row_prefix=currency.encode(), limit=1), None)
+
+    if data is None:
+        return datetime.datetime.fromtimestamp(0)
+
+    timestamp = int(key_part(data[0], 1))
+    return datetime.datetime.fromtimestamp(timestamp)
+
+
+
+def get_last_rolling_average_date() -> Optional[datetime.date]:
+    with table('rolling_average') as rolling_average:
+        data = next(iter(rolling_average.scan(reverse=True, limit=1)), None)
+
+    if data is None:
+        return None
+
+    return key_part_as_date(data[0], 0)
+
+
+def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind):
+    start_date_part = date_to_next_bytes(date) if date else b''
+    with table('nbrb') as nbrb:
+        return nbrb.scan(row_start=kind.as_prefix + start_date_part)
+
+
+
 ############## INSERT ############
 
 def _put_in_batch(
         table_name: str,
-        key_to_data: Dict[bytes, Dict[bytes, bytes]],
+        data: Dict[bytes, Dict[bytes, bytes]],
         *,
         prefix: bytes=b'',
         transaction=True,
 ):
     with table(table_name) as a_table:
-        with a_table.batch(transaction=True) as batch:
-            for key, data in key_to_data.items():
-                batch.put(prefix + key, data)
+        with a_table.batch(transaction=transaction) as batch:
+            for key, values in data.items():
+                batch.put(prefix + key, values)
 
 
 def insert_nbrb(data):
@@ -84,7 +141,7 @@ def insert_nbrb(data):
 
 def insert_nbrb_local(data):
     data = {
-        date_to_bytes(x['date']):
+        x['date']:
             {
                 b'rate:usd': str(x['USD']).encode(),
                 b'rate:eur': str(x['EUR']).encode(),
@@ -98,7 +155,7 @@ def insert_nbrb_local(data):
 
 def add_nbrb_global(data):
     data = {
-        date_to_bytes(x['date']):
+        x['date']:
             {
                 b'rate:byn': str(x['BYN']).encode(),
                 b'rate:eur': str(x['EUR']).encode(),
@@ -146,7 +203,7 @@ def insert_external_rates(
         for record in data
     }
 
-    _put_in_batch('external_rate', key_to_data=data)
+    _put_in_batch('external_rate', data=data)
 
 
 
@@ -168,7 +225,7 @@ def insert_bcse(data: Iterable[BcseData], **kwargs):
         for x in data
     }
 
-    _put_in_batch('bcse', key_to_data=data)
+    _put_in_batch('bcse', data=data)
 
 
 def insert_prediction(
