@@ -3,12 +3,14 @@ import json
 import logging
 import os
 import threading
+import warnings
 from collections import defaultdict
 from dataclasses import asdict
 from decimal import Decimal
 from functools import partial
 from itertools import chain
 from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
+
 
 from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra import ConsistencyLevel
@@ -20,6 +22,7 @@ from byn.predict.predictor import PredictionRecord
 from byn.utils import DecimalAwareEncoder, always_on_sync
 
 
+warnings.warn("Cassandra db usage is under deprecation. Use hbase instead.", DeprecationWarning)
 logger = logging.getLogger(__name__)
 
 CASSANDRA_HOSTS = os.environ['CASSANDRA_HOSTS'].split(',')

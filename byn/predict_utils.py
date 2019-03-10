@@ -9,9 +9,16 @@ import numpy as np
 import byn.constants as const
 from byn.predict.predictor import Predictor, RidgeWeight
 from byn.predict.processor import GlobalToNormlizedDataProcessor
-from byn.cassandra_db import get_accumulated_error
 from byn.datatypes import LocalRates
-from byn.hbase_db import db, bytes_to_date, date_to_next_bytes, table, key_part, get_decimal
+from byn.hbase_db import (
+    db,
+    bytes_to_date,
+    date_to_next_bytes,
+    table,
+    key_part,
+    get_decimal,
+    get_accumulated_error,
+)
 
 
 

@@ -6,8 +6,6 @@ from typing import Tuple
 
 from celery import group
 
-from byn import constants as const
-from byn.cassandra_db import db
 from byn.tasks.launch import app
 
 
@@ -55,6 +53,8 @@ def backup_async():
 
 @app.task
 def _create_cassandra_table_backup(table: str, columns: Tuple[str]):
+    from byn.cassandra_db import db
+
     data = db.execute(f'SELECT {", ".join(columns)} from {table}', timeout=120)
     with gzip.open(f'/tmp/{table}.csv.gz', mode='wt') as f:
         writer = csv.writer(f, delimiter=';')

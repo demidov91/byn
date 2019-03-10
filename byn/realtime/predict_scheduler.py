@@ -8,7 +8,7 @@ import json
 import logging
 
 from byn import constants as const
-from byn.cassandra_db import (
+from byn.hbase_db import (
     get_the_last_external_rates,
 )
 from byn.datatypes import LocalRates
@@ -25,7 +25,7 @@ async def predict_scheduler():
         const.FOREXPF_CURRENCIES_TO_LISTEN,
         datetime.datetime.now()
     )
-    raw_input_data = {k.lower(): v.open for k, v in raw_input_data.items()}
+    raw_input_data = {k.lower(): v['rate_open'] for k, v in raw_input_data.items()}
 
     while True:
         external_rates = (

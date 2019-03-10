@@ -4,10 +4,9 @@ from itertools import chain
 
 import numpy as np
 
-from byn.cassandra_db import (
+from byn.hbase_db import (
     get_latest_external_rates,
     get_external_rate_live,
-
 )
 from byn.realtime.detailed_rates import RatesDetailedExtractor
 

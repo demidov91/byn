@@ -13,8 +13,7 @@ from aiohttp.client import ClientSession
 from aioredis import Redis
 
 import byn.constants as const
-from byn.cassandra_db import get_bcse_in
-from byn.hbase_db import insert_bcse
+from byn.hbase_db import insert_bcse, get_bcse_in
 from byn.datatypes import BcseData, PredictCommand
 from byn.utils import always_on_coroutine, create_redis
 from byn.realtime.synchronization import (
@@ -90,13 +89,10 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
 
 
 def _build_initial_current_records(today: datetime.date):
-    return OrderedDict((
-        (int(dt.timestamp() * 1000), rate)
-        for dt, rate in get_bcse_in(
-            'USD',
-            _get_todays_bcse_start(today),
-            datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
-        )
+    return OrderedDict(get_bcse_in(
+        'USD',
+        _get_todays_bcse_start(today),
+        datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
     ))
 
 
@@ -124,13 +120,13 @@ async def _extract_and_publish(today, current_records, redis, client):
         return
 
     data = [(dt // 1000 - 60 * 60 * const.FIX_BCSE_TIMESTAMP, rate) for dt, rate in data]
-    current_ms_timestamp = int(datetime.datetime.now().timestamp())
+    current_timestamp = int(datetime.datetime.now().timestamp())
 
     new_data = [
         BcseData(
             currency='USD',
-            ms_timestamp_operation=dt,
-            ms_timestamp_received=current_ms_timestamp,
+            timestamp_operation=dt,
+            timestamp_received=current_timestamp,
             rate=rate
         )
         for dt, rate in data
