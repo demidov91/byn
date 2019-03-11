@@ -11,3 +11,7 @@ def run():
         connection.create_table('bcse', {'rate': {}})
         connection.create_table('prediction', {'rate': {}})
 
+
+if __name__ == '__main__':
+    run()
+

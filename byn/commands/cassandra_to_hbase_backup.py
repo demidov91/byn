@@ -10,10 +10,15 @@ def _cass_ts_to_hbase_ts(cass_ts: str) -> str:
     ).timestamp()))
 
 
-def conver_bcse(cassandra_backup_path: str, hbase_backup_path: str):
+def convert_bcse(cassandra_backup_path: str, hbase_backup_path: str):
     with gzip.open(cassandra_backup_path, mode='rt') as cass_f, gzip.open(hbase_backup_path, mode='wt') as hbase_f:
         reader = DictReader(cass_f, delimiter=';')
-        writer = DictWriter(hbase_f, fieldnames=['key', 'rate:timestamp_received', 'rate:rate'], delimiter=';')
+        writer = DictWriter(
+            hbase_f,
+            fieldnames=['key', 'rate:timestamp_received', 'rate:rate'],
+            delimiter=';'
+        )
+        writer.writeheader()
 
         for row in reader:
             writer.writerow({
@@ -25,7 +30,7 @@ def conver_bcse(cassandra_backup_path: str, hbase_backup_path: str):
 
 if __name__ == '__main__':
     if sys.argv[1] == 'bcse':
-        conver_bcse(*sys.argv[2:])
+        convert_bcse(*sys.argv[2:])
     else:
         raise ValueError(sys.argv[0])
 

@@ -67,7 +67,7 @@ class NbrbKind(Enum):
 
 
 ############# SELECT ############
-def get_last_nbrb_record(kind: NbrbKind) -> Tuple[bytes, Dict[bytes: bytes]]:
+def get_last_nbrb_record(kind: NbrbKind) -> Tuple[bytes, Dict[bytes, bytes]]:
     with table('nbrb') as nbrb:
         return next(iter(nbrb.scan(reverse=True, limit=1, row_prefix=kind.as_prefix)), None)
 

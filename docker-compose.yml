@@ -70,9 +70,10 @@ services:
   hbase-master:
     image: "dajobe/hbase"
     ports:
+      - "9090:9090"
       - "16010:16010"
     volumes:
-      - ./mount/hbase-master:/var/lib/cassandra
+      - ./mount/hbase-master:/data
     cpus: 0.5
     mem_limit: 512m
     memswap_limit: 512m
