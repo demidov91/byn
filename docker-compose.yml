@@ -9,6 +9,7 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - python
+      - celery
 
   python:
     build:
@@ -21,25 +22,15 @@ services:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
       - REDIS_URL=redis://redis
-#      - CASSANDRA_HOSTS=cassandra_1,cassandra_2
-#      - CASSANDRA_PORT=9042
-#      - CASSANDRA_NODE_COUNT=${CASSANDRA_NODE_COUNT:-2}
       - HBASE_HOST=${HBASE_HOST:-hbase-master}
       - BACKUP_BUCKET=${BACKUP_BUCKET:-byn-dzmitry-by-backup}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
 
-    depends_on:
-      - celery
-    cpus: 0.2
+    cpus: 0.5
     mem_limit: 128m
     memswap_limit: 256m
 
-
-  redis:
-    image: "redis:5-alpine3.8"
-    ports:
-      - "${HOST_REDIS_PORT:-6379}:6379"
 
   celery:
     build:
@@ -65,36 +56,23 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
     depends_on:
-      - cassandra_1
-      - cassandra_2
+      - hbase-master
       - redis
-    cpus: 0.2
+    cpus: 0.5
     mem_limit: 128m
     memswap_limit: 256m
-  
 
-  cassandra_1:
-    image: "cassandra:3.11"
+  redis:
+    image: "redis:5-alpine3.8"
     ports:
-      - "19042:9042/tcp"
-    environment:
-      - CASSANDRA_SEEDS=cassandra_2
-      - CASSANDRA_CLUSTER_NAME=byn
-    volumes:
-      - ./mount/cassandra_1:/var/lib/cassandra
-    cpus: 0.5
-    mem_limit: 512m
-    memswap_limit: 512m
+      - "${HOST_REDIS_PORT:-6379}:6379"
 
-  cassandra_2:
-    image: "cassandra:3.11"
+  hbase-master:
+    image: "dajobe/hbase"
     ports:
-      - "29042:9042/tcp"
-    environment:
-      - CASSANDRA_SEEDS=cassandra_1
-      - CASSANDRA_CLUSTER_NAME=byn
+      - "16010:16010"
     volumes:
-      - ./mount/cassandra_2:/var/lib/cassandra
+      - ./mount/hbase-master:/var/lib/cassandra
     cpus: 0.5
     mem_limit: 512m
     memswap_limit: 512m
