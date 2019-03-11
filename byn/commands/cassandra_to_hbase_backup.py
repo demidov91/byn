@@ -28,9 +28,29 @@ def convert_bcse(cassandra_backup_path: str, hbase_backup_path: str):
             })
 
 
+def convert_trade_date(cassandra_backup_path: str, hbase_backup_path: str):
+    rows = 'predicted', 'prediction_error', 'accumulated_error'
+
+    with gzip.open(cassandra_backup_path, mode='rt') as cass_f, gzip.open(hbase_backup_path, mode='wt') as hbase_f:
+        reader = DictReader(cass_f, delimiter=';')
+        writer = DictWriter(
+            hbase_f,
+            fieldnames=['key', *('rate:' + x for x in rows)],
+            delimiter=';'
+        )
+        writer.writeheader()
+
+        for row in reader:
+            pairs = [('key', row['date'])]
+            pairs.extend(('rate:' + x, row.get(x)) for x in rows)
+            writer.writerow(dict(pairs))
+
+
 if __name__ == '__main__':
     if sys.argv[1] == 'bcse':
         convert_bcse(*sys.argv[2:])
+    elif sys.argv[1] == 'trade_date':
+        convert_trade_date(*sys.argv[2:])
     else:
         raise ValueError(sys.argv[0])
 
