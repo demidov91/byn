@@ -390,22 +390,22 @@ def insert_external_rates(
         currency: str,
         data: Iterator[
             Tuple[
-                datetime.datetime,
-                Decimal,
-                Decimal,
-                Decimal,
-                Decimal,
+                int,
+                str,
+                str,
+                str,
+                str,
                 int
             ]
         ]
 ):
     data = {
         f'{currency}|{record[0]}'.encode(): {
-            b'rate:open': record[1],
-            b'rate:close': record[2],
-            b'rate:low': record[3],
-            b'rate:high': record[4],
-
+            b'rate:open': record[1].encode(),
+            b'rate:close': record[2].encode(),
+            b'rate:low': record[3].encode(),
+            b'rate:high': record[4].encode(),
+            b'rate:volume': str(record[5]).encode(),
         }
         for record in data
     }
