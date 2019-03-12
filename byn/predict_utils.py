@@ -18,6 +18,7 @@ from byn.hbase_db import (
     key_part,
     get_decimal,
     get_accumulated_error,
+    NbrbKind,
 )
 
 
@@ -81,8 +82,8 @@ def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.nda
     with table('nbrb') as nbrb_table:
         keys, rates = zip(
             *nbrb_table.scan(
-                row_start=b'global|',
-                row_stop=b'global|' + date_to_next_bytes(date)
+                row_start=NbrbKind.GLOBAL.as_prefix,
+                row_stop=NbrbKind.GLOBAL.as_prefix + date_to_next_bytes(date)
             )
         )
 

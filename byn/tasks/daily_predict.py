@@ -2,9 +2,11 @@ import datetime
 import logging
 from decimal import Decimal
 
+from happybase.util import bytes_increment
+
 from byn.predict_utils import build_and_predict_linear
 from byn.tasks.launch import app
-from byn.hbase_db import bytes_to_date, get_decimal, date_to_next_bytes, db, key_part
+from byn.hbase_db import bytes_to_date, get_decimal, date_to_next_bytes, db, key_part, NbrbKind
 
 
 start_prediction_day = datetime.date(2018, 7, 15)
@@ -18,7 +20,6 @@ def daily_predict():
 
         last_record = next(trade_date.scan(
             reverse=True,
-            columns=[b'rate:accumulated_error'],
             limit=1,
             filter="SingleColumnValueFilter('rate', 'predicted', >, 'binary:', true, true)",
         ), None)
@@ -28,8 +29,8 @@ def daily_predict():
 
         nbrb = connection.table('nbrb')
         key_to_data = nbrb.scan(
-            row_start=b'global|' + date_to_next_bytes(start_date),
-            columns=[b'rate:byn'],
+            row_start=NbrbKind.GLOBAL.as_prefix + date_to_next_bytes(start_date),
+            row_stop=bytes_increment(NbrbKind.GLOBAL.as_prefix),
             filter="SingleColumnValueFilter('rate', 'eur', >, 'binary:', true, true) AND "
                    "SingleColumnValueFilter('rate', 'rub', >, 'binary:', true, true) AND "
                    "SingleColumnValueFilter('rate', 'uah', >, 'binary:', true, true)",

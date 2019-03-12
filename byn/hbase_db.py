@@ -305,13 +305,13 @@ def get_accumulated_error(date: datetime.date):
                 reverse=True,
                 limit=1,
                 columns=[b'rate:accumulated_error'],
-                filter="SingleColumnValueFilter('rate', 'accumulated_error', >, 'binary:', true)",
+                filter="SingleColumnValueFilter('rate', 'accumulated_error', >, 'binary:', true, true)",
                 row_start=date_to_bytes(date)
             ),
             None
         )
 
-    return record and get_decimal(record[0], b'rate:accumulated_error')
+    return record and get_decimal(record[1], b'rate:accumulated_error')
 
 
 ############## INSERT ############
