@@ -82,12 +82,20 @@ def _send_table_backup_to_s3(table: str):
 
 HBASE_BACKUP_TABLES = (
     (
+        'external_rate',
+        ('open', 'close', 'low', 'high', 'volume')
+    ),
+    (
+        'external_rate_live',
+        ('timestamp_received', 'close')
+    ),
+    (
         'bcse',
         ('timestamp_received', 'rate')
     ),
     (
         'nbrb',
-        ('usd', 'eur', 'rub', 'uah', 'dxy')
+        ('usd', 'eur', 'rub', 'uah', 'byn', 'dxy')
     ),
     (
         'prediction',
@@ -112,19 +120,20 @@ def hbase_backup_async():
 def _create_hbase_table_backup(table_name: str, columns: Tuple[str]):
     from byn.hbase_db import table
 
+    columns = ['rate:' + x for x in columns]
 
-
-    with gzip.open(f'/tmp/{table}.csv.gz', mode='wt') as f:
+    with gzip.open(f'/tmp/{table_name}.csv.gz', mode='wt') as f:
         writer = csv.writer(f, delimiter=';')
         writer.writerow(tuple(('key', *columns)))
 
         with table(table_name) as the_table:
-            logging.debug('Start scanning.')
             data = (
-                tuple((x[0], *(x[1].get(f'rate:{column}') for column in columns)))
-                for x in the_table.scan()
+                tuple(
+                    (key.decode(),
+                     *(value.get(x.encode(), b'').decode() for x in columns))
+                )
+                for key, value in the_table.scan()
             )
-            logging.debug('Start writing into csv.')
             writer.writerows(data)
 
 

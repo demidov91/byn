@@ -175,9 +175,9 @@ def load_nbrb_local() -> Tuple[dict]:
     data = tuple({
         'date': key_part(x[0], 1),
         'USD': get_decimal(x[1], b'rate:usd'),
-        'EUR': get_decimal(x[1], b'rate:eur') / get_decimal(x[1], b'rate:usd'),
-        'RUB': get_decimal(x[1], b'rate:rub') / get_decimal(x[1], b'rate:rub') * 100,
-        'UAH': get_decimal(x[1], b'rate:uah') / get_decimal(x[1], b'rate:uah') * 100,
+        'EUR': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:eur'),
+        'RUB': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:rub') * 100,
+        'UAH': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:uah') * 100,
     } for x in clean_data)
     insert_nbrb_local(data)
     return data
