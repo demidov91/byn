@@ -174,10 +174,10 @@ def load_nbrb_local() -> Tuple[dict]:
 
     data = tuple({
         'date': key_part(x[0], 1),
-        'USD': get_decimal(x, b'rate:usd'),
-        'EUR': get_decimal(x, b'rate:usd') / get_decimal(x, b'rate:usd'),
-        'RUB': get_decimal(x, b'rate:usd') / get_decimal(x, b'rate:rub') * 100,
-        'UAH': get_decimal(x, b'rate:usd') / get_decimal(x, b'rate:uah') * 100,
+        'USD': get_decimal(x[1], b'rate:usd'),
+        'EUR': get_decimal(x[1], b'rate:eur') / get_decimal(x[1], b'rate:usd'),
+        'RUB': get_decimal(x[1], b'rate:rub') / get_decimal(x[1], b'rate:rub') * 100,
+        'UAH': get_decimal(x[1], b'rate:uah') / get_decimal(x[1], b'rate:uah') * 100,
     } for x in clean_data)
     insert_nbrb_local(data)
     return data
@@ -189,14 +189,14 @@ def load_nbrb_global():
     date = record and key_part_as_date(record[0], 1)
 
     nbrb_local = get_nbrb_gt(date, kind=NbrbKind.LOCAL)
-    dxy = {x.date: x.dxy for x in get_nbrb_global_gt(date)}
+    dxy = {key_part(x[0], 1): get_decimal(x[1], b'rate:dxy') for x in get_nbrb_gt(date, kind=NbrbKind.GLOBAL)}
 
     data = tuple({
         'date': key_part(x[0], 1),
-        'BYN': get_decimal(x, b'rate:usd') / dxy[key_part(x[0], 1)],
-        'EUR': get_decimal(x, b'rate:eur') / dxy[key_part(x[0], 1)],
-        'RUB': get_decimal(x, b'rate:rub') / dxy[key_part(x[0], 1)],
-        'UAH': get_decimal(x, b'rate:uah') / dxy[key_part(x[0], 1)],
+        'BYN': get_decimal(x[1], b'rate:usd') / dxy[key_part(x[0], 1)],
+        'EUR': get_decimal(x[1], b'rate:eur') / dxy[key_part(x[0], 1)],
+        'RUB': get_decimal(x[1], b'rate:rub') / dxy[key_part(x[0], 1)],
+        'UAH': get_decimal(x[1], b'rate:uah') / dxy[key_part(x[0], 1)],
     } for x in nbrb_local)
 
     add_nbrb_global(data)
@@ -207,14 +207,14 @@ def load_nbrb_global():
 
 @app.task
 def load_nbrb(rates):
-    cass_rates = defaultdict(dict)
+    db_rates = defaultdict(dict)
     for rate in rates:
-        cass_rates[rate['Date']][rate['cur']] = Decimal(rate['rate'])
+        db_rates[rate['Date']][rate['cur']] = Decimal(rate['rate'])
 
-    for date, rates in cass_rates.items():
+    for date, rates in db_rates.items():
         rates['date'] = date
 
-    data = tuple(cass_rates.values())
+    data = tuple(db_rates.values())
     insert_nbrb(data)
     return data
 
@@ -222,8 +222,8 @@ def load_nbrb(rates):
 @app.task
 def load_rolling_average():
     last_rolling_average_date = get_last_rolling_average_date()
-    data = tuple(get_nbrb_gt(None, kind=NbrbKind.GLOBAL))
-    dates = [key_part_as_date(x[0], 1) for x in data]
+    keys, values = zip(*get_nbrb_gt(None, kind=NbrbKind.GLOBAL))
+    dates = [key_part_as_date(key, 1) for key in keys]
     rates = np.array([
         (
             get_decimal(x, b'rate:eur'),
@@ -231,7 +231,7 @@ def load_rolling_average():
             get_decimal(x, b'rate:uah'),
             get_decimal(x, b'rate:dxy'),
         )
-        for x in data
+        for x in values
     ])
 
     if last_rolling_average_date is None:

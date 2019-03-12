@@ -1,21 +1,52 @@
 import datetime
 import json
 import os
+import threading
 from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
 from dataclasses import asdict
 from decimal import Decimal
-from typing import Collection, Dict, Iterable, Iterator, Optional, Sequence, Tuple
+from typing import Collection, Dict, Iterable, Iterator, Optional, Sequence, Tuple, Union
 from enum import Enum
 
 import happybase
+from celery.signals import worker_process_init, worker_process_shutdown
 from happybase.util import bytes_increment
+from happybase.pool import ConnectionPool
 
 from byn.datatypes import ExternalRateData, BcseData
 from byn.predict.predictor import PredictionRecord
-from byn.utils import DecimalAwareEncoder
+from byn.utils import DecimalAwareEncoder, always_on_sync
 
-db = happybase.ConnectionPool(size=4, host=os.environ['HBASE_HOST'])
+
+thread_local = threading.local()
+
+@always_on_sync
+def _get_pool():
+    print('Pool initialized!')
+    return happybase.ConnectionPool(size=4, host=os.environ['HBASE_HOST'], timeout=5000, protocol='binary')
+
+
+
+
+class PerProcessHbasePool:
+    def __getattr__(self, item):
+        return getattr(thread_local.hbase_pool, item)
+
+    def __setattr__(self, key, value):
+        return setattr(thread_local.hbase_pool, key, value)
+
+    def connect(self):
+        thread_local.hbase_pool = _get_pool()
+
+
+db = PerProcessHbasePool() # type: Union[ConnectionPool, PerProcessHbasePool]
+db.connect()
+
+
+@worker_process_init.connect
+def _init_hbase_pool(**kwargs):
+    db.connect()
 
 
 @contextmanager
@@ -51,7 +82,10 @@ def key_part_as_date(key: bytes, index: int) -> datetime.date:
     return bytes_to_date(key_part(key, index))
 
 
-def get_decimal(row: dict, column: bytes) -> Decimal:
+def get_decimal(row: dict, column: bytes) -> Optional[Decimal]:
+    if column not in row:
+        return None
+
     return Decimal(row[column].decode())
 
 
@@ -72,12 +106,12 @@ def get_last_nbrb_record(kind: NbrbKind) -> Tuple[bytes, Dict[bytes, bytes]]:
         return next(iter(nbrb.scan(reverse=True, limit=1, row_prefix=kind.as_prefix)), None)
 
 def get_last_nbrb_global_with_rates():
-    with table('nbbr') as nbrb:
+    with table('nbrb') as nbrb:
         return next(iter(nbrb.scan(
             reverse=True,
             limit=1,
             row_prefix=NbrbKind.GLOBAL.as_prefix,
-            filter="SingleColumnValueFilter('rate', 'byn', >, '', true)"
+            filter="SingleColumnValueFilter('rate', 'byn', >, 'binary:', true, true)"
         )), None)
 
 
@@ -106,7 +140,10 @@ def get_last_rolling_average_date() -> Optional[datetime.date]:
 def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind):
     start_date_part = date_to_next_bytes(date) if date else b''
     with table('nbrb') as nbrb:
-        return nbrb.scan(row_start=kind.as_prefix + start_date_part)
+        return nbrb.scan(
+            row_start=kind.as_prefix + start_date_part,
+            row_stop=bytes_increment(kind.as_prefix)
+        )
 
 def get_bcse_in(
         currency: str,
@@ -268,7 +305,7 @@ def get_accumulated_error(date: datetime.date):
                 reverse=True,
                 limit=1,
                 columns=[b'rate:accumulated_error'],
-                filter="SingleColumnValueFilter('rate', 'accumulated_error', >, '', true)",
+                filter="SingleColumnValueFilter('rate', 'accumulated_error', >, 'binary:', true)",
                 row_start=date_to_bytes(date)
             ),
             None
@@ -294,7 +331,7 @@ def _put_in_batch(
 
 def insert_nbrb(data):
     data = {
-        date_to_bytes(x['date']):
+        x['date'].encode():
         {
             b'rate:usd': str(x['USD']).encode(),
             b'rate:eur': str(x['EUR']).encode(),
@@ -303,7 +340,7 @@ def insert_nbrb(data):
         }
         for x in data
     }
-    _put_in_batch('nbrb', data, prefix=b'official|')
+    _put_in_batch('nbrb', data, prefix=NbrbKind.OFFICIAL.as_prefix)
 
 
 
@@ -318,7 +355,7 @@ def insert_nbrb_local(data):
             }
         for x in data
     }
-    _put_in_batch('nbrb', data, prefix=b'local|')
+    _put_in_batch('nbrb', data, prefix=NbrbKind.LOCAL.as_prefix)
 
 
 def add_nbrb_global(data):
@@ -332,7 +369,7 @@ def add_nbrb_global(data):
             }
         for x in data
     }
-    _put_in_batch('nbrb', data, prefix=b'local|')
+    _put_in_batch('nbrb', data, prefix=NbrbKind.GLOBAL.as_prefix)
 
 
 def insert_trade_dates(trade_dates: Collection[str]):
@@ -341,7 +378,9 @@ def insert_trade_dates(trade_dates: Collection[str]):
 
 def insert_dxy_12MSK(data: Iterable[Tuple[str ,str]]):
     data = {
-        date.encode(): dxy.encode
+        date.encode(): {
+            b'rate:dxy': dxy.encode()
+        }
         for date, dxy in data
     }
     _put_in_batch('nbrb', data, prefix=b'global|')
@@ -423,10 +462,10 @@ def insert_rolling_average(date: datetime.date, duration: int, data: Sequence[De
     with table('rolling_average') as rolling_average:
         key = date_to_bytes(date) + b'|' + str(duration).encode()
         rolling_average.put(key, {
-            b'rate:eur': data[0],
-            b'rate:rub': data[1],
-            b'rate:uah': data[2],
-            b'rate:dxy': data[3],
+            b'rate:eur': str(data[0]).encode(),
+            b'rate:rub': str(data[1]).encode(),
+            b'rate:uah': str(data[2]).encode(),
+            b'rate:dxy': str(data[3]).encode(),
         })
 
 

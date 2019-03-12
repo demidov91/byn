@@ -28,7 +28,7 @@ app.conf.beat_schedule = {
         'schedule': crontab(minute=0, hour=1),
     },
     'backup': {
-        'task': 'byn.tasks.backup.backup_async',
+        'task': 'byn.tasks.backup.hbase_backup_async',
         'schedule': crontab(minute=30, hour=1),
     },
 }

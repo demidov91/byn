@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 @app.task
 def daily_predict():
     with db.connection() as connection:
-        trade_date = connection.table('tarde_date')
+        trade_date = connection.table('trade_date')
 
         last_record = next(trade_date.scan(
             reverse=True,
             columns=[b'rate:accumulated_error'],
             limit=1,
-            filter="SingleColumnValueFilter('rate', 'predicted', >, '', true)",
+            filter="SingleColumnValueFilter('rate', 'predicted', >, 'binary:', true, true)",
         ), None)
 
         start_date = bytes_to_date(last_record[0]) if last_record else start_prediction_day
@@ -30,9 +30,9 @@ def daily_predict():
         key_to_data = nbrb.scan(
             row_start=b'global|' + date_to_next_bytes(start_date),
             columns=[b'rate:byn'],
-            filter="SingleColumnValueFilter('rate', 'eur', >, '', true) AND "
-                   "SingleColumnValueFilter('rate', 'rub', >, '', true) AND "
-                   "SingleColumnValueFilter('rate', 'uah', >, '', true)",
+            filter="SingleColumnValueFilter('rate', 'eur', >, 'binary:', true, true) AND "
+                   "SingleColumnValueFilter('rate', 'rub', >, 'binary:', true, true) AND "
+                   "SingleColumnValueFilter('rate', 'uah', >, 'binary:', true, true)",
         )
 
         new_data = []
