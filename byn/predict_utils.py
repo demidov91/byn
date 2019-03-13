@@ -60,7 +60,7 @@ def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[da
 
     for key, data in rolling_averages:
         date, duration = key.split(b'|')
-        rolling_averages_as_dict[date][duration] = data.values()
+        rolling_averages_as_dict[date][duration] = [data[column] for column in EXTERNAL_RATES_COLUMNS]
 
     for today in rates_as_dict:
         todays_X = np.full(X_LENGTH, None)

@@ -10,7 +10,7 @@ from typing import Collection, Dict, Iterable, Iterator, Optional, Sequence, Tup
 from enum import Enum
 
 import happybase
-from celery.signals import worker_process_init, worker_process_shutdown
+from celery.signals import worker_process_init
 from happybase.util import bytes_increment
 from happybase.pool import ConnectionPool
 
@@ -280,11 +280,11 @@ def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.date
     with table('external_rate') as external_rate:
         for currency in currencies:
             currency_to_data[currency] = _parse_external_rate_row(
-                *external_rate.scan(
+                *next(external_rate.scan(
                     row_start=f'{currency}|{int(end_dt.timestamp()) - 1}'.encode(),
                     reverse=True,
                     limit=1
-                )[0]
+                ))
             )
 
     return currency_to_data

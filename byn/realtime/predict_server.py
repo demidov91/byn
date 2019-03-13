@@ -46,7 +46,10 @@ async def run():
 
         if predictor.meta.last_date < today:
             start_dt = datetime.datetime.fromordinal(today.toordinal())
-            bcse_data = np.array(get_bcse_in('USD', start_dt=start_dt), dtype=np.dtype(object))
+            bcse_data = np.array(
+                tuple(get_bcse_in('USD', start_dt=start_dt)),
+                dtype=np.dtype(object)
+            )
 
             todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
 

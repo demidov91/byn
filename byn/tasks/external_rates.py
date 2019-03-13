@@ -17,7 +17,7 @@ from byn.tasks.launch import app
 RESOLUTIONS = (1, 3, 5, 15, 30, 60, 120)
 
 
-@app.task(autoretry_for=(Exception, ))
+@app.task(autoretry_for=(Exception, ), retry_backoff=True)
 def extract_one_currency(start_dt: datetime.datetime, currency: str):
     end_dt = datetime.datetime.now()
     data_to_store = []
@@ -41,7 +41,7 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
         json.dump(data_to_store, f)
 
 
-@app.task(autoretry_for=(Exception, ))
+@app.task(autoretry_for=(Exception, ), retry_backoff=True)
 def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
         data = json.load(f, parse_float=str)
