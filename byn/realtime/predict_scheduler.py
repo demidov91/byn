@@ -13,19 +13,31 @@ from byn.hbase_db import (
 )
 from byn.datatypes import LocalRates
 from byn.utils import create_redis, always_on_coroutine, DecimalAwareEncoder
-from byn.realtime.synchronization import predict_with_timeout
+from byn.realtime.synchronization import (
+    predict_with_timeout,
+    wait_for_any_data_thread,
+    EXTERNAL_HISTORY,
+    EXTERNAL_LIVE,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @always_on_coroutine
 async def predict_scheduler():
-    redis = await create_redis()
+    await wait_for_any_data_thread([EXTERNAL_HISTORY, EXTERNAL_LIVE])
+
     raw_input_data = get_the_last_external_rates(
         const.FOREXPF_CURRENCIES_TO_LISTEN,
         datetime.datetime.now()
     )
-    raw_input_data = {k.lower(): v['rate_open'] for k, v in raw_input_data.items()}
+    raw_input_data = {
+        k.lower(): str(v['rate_close'])
+        for k, v in raw_input_data.items()
+    }
+
+    redis = await create_redis()
+    logger.debug('Prediction scheduler has started.')
 
     while True:
         external_rates = (

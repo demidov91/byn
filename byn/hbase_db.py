@@ -282,7 +282,7 @@ def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.date
         for currency in currencies:
             currency_to_data[currency] = _parse_external_rate_row(
                 *next(external_rate.scan(
-                    row_start=f'{currency}|{int(end_dt.timestamp()) - 1}'.encode(),
+                    row_start=f'{currency}|{int(end_dt.timestamp())}'.encode(),
                     reverse=True,
                     limit=1
                 ))
