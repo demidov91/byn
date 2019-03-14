@@ -78,7 +78,10 @@ def update_nbrb_rates_async(need_last_date=True):
     )()
 
 
-@app.task
+@app.task(
+    autoretry_for=(Exception, ),
+    retry_backoff=True,
+)
 def load_trade_dates() -> Sequence[str]:
     dates = client.get(TRADE_DATES_URL).json()
     insert_trade_dates(dates)
@@ -132,7 +135,10 @@ def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Itera
 
 
 
-@app.task
+@app.task(
+    autoretry_for=(Exception, ),
+    retry_backoff=True,
+)
 def load_dxy_12MSK() -> Tuple[Iterable]:
     record = get_last_nbrb_record(NbrbKind.GLOBAL)
     date = record and key_part_as_date(record[0], 1)

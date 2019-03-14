@@ -6,14 +6,25 @@ from happybase.util import bytes_increment
 
 from byn.predict_utils import build_and_predict_linear
 from byn.tasks.launch import app
-from byn.hbase_db import bytes_to_date, get_decimal, date_to_next_bytes, db, key_part, NbrbKind
+from byn.hbase_db import (
+    bytes_to_date,
+    get_decimal,
+    date_to_next_bytes,
+    db,
+    key_part,
+    NbrbKind,
+    table,
+)
 
 
 start_prediction_day = datetime.date(2018, 7, 15)
 logger = logging.getLogger(__name__)
 
 
-@app.task
+@app.task(
+    autoretry_for=(Exception, ),
+    retry_backoff=True,
+)
 def daily_predict():
     with db.connection() as connection:
         trade_date = connection.table('trade_date')
@@ -28,34 +39,35 @@ def daily_predict():
         accumulated_error = get_decimal(last_record[1], b'rate:accumulated_error') if last_record else 0
 
         nbrb = connection.table('nbrb')
-        key_to_data = nbrb.scan(
+        key_to_data = tuple(nbrb.scan(
             row_start=NbrbKind.GLOBAL.as_prefix + date_to_next_bytes(start_date),
             row_stop=bytes_increment(NbrbKind.GLOBAL.as_prefix),
             filter="SingleColumnValueFilter('rate', 'eur', >, 'binary:', true, true) AND "
                    "SingleColumnValueFilter('rate', 'rub', >, 'binary:', true, true) AND "
                    "SingleColumnValueFilter('rate', 'uah', >, 'binary:', true, true)",
-        )
+        ))
 
-        new_data = []
+    new_data = []
 
-        for key, data in key_to_data:
-            date = key_part(key, 1)
-            real_rate = get_decimal(data, b'rate:byn')
+    for key, data in key_to_data:
+        date = key_part(key, 1)
+        real_rate = get_decimal(data, b'rate:byn')
 
-            predicted = Decimal(build_and_predict_linear(bytes_to_date(date)))
-            prediction_error = predicted/real_rate - 1
-            accumulated_error += prediction_error
+        predicted = Decimal(build_and_predict_linear(bytes_to_date(date)))
+        prediction_error = predicted/real_rate - 1
+        accumulated_error += prediction_error
 
-            data = {
-                'date': date,
-                b'rate:predicted': str(predicted).encode(),
-                b'rate:prediction_error': str(prediction_error).encode(),
-                b'rate:accumulated_error': str(accumulated_error).encode(),
-            }
+        data = {
+            'date': date,
+            b'rate:predicted': str(predicted).encode(),
+            b'rate:prediction_error': str(prediction_error).encode(),
+            b'rate:accumulated_error': str(accumulated_error).encode(),
+        }
 
-            logger.debug(data)
-            new_data.append(data)
+        logger.debug(data)
+        new_data.append(data)
 
+    with table('trade_date') as trade_date:
         for row in new_data:
-            key = b'global|' + row.pop('date')
+            key = row.pop('date')
             trade_date.put(key, row)

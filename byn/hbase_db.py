@@ -241,7 +241,8 @@ def get_latest_external_rates(
     with table('external_rate') as external_rate:
         for currency in currencies:
             rows = external_rate.scan(
-                row_start=f'{currency}|{int(start_dt.timestamp())}'.encode()
+                row_start=f'{currency}|{int(start_dt.timestamp())}'.encode(),
+                row_stop=bytes_increment(f'{currency}|'.encode()),
             )
 
             currency_to_rows[currency].extend(_parse_external_rate_row(*x) for x in rows)
@@ -292,7 +293,7 @@ def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.date
 
 def _parse_external_rate_row(key, value):
     return {
-        'ts_open': key_part(key, 1),
+        'ts_open': int(key_part(key, 1)),
         'rate_open': get_decimal(value, b'rate:open'),
         'rate_close': get_decimal(value, b'rate:close'),
     }
@@ -417,7 +418,7 @@ def insert_external_rates(
 def insert_external_rate_live(row: ExternalRateData):
     with table('external_rate_live') as external_rate_live:
         external_rate_live.put(f'{row.currency}|{row.timestamp_open}|{row.volume}'.encode(), {
-            b'rate:timestamp_received': str(row.timestamp_received).encode(),
+            b'rate:timestamp_received': str(int(round(row.timestamp_received))).encode(),
             b'rate:close': str(row.close).encode(),
         })
 
@@ -426,8 +427,8 @@ def insert_external_rate_live(row: ExternalRateData):
 def insert_bcse(data: Iterable[BcseData], **kwargs):
     data = {
         f'{x.currency}|{x.timestamp_operation}'.encode(): {
-            b'rate:timestamp_received': x.timestamp_received,
-            b'rate:rate': x.rate,
+            b'rate:timestamp_received': str(x.timestamp_received).encode(),
+            b'rate:rate': x.rate.encode(),
         }
         for x in data
     }

@@ -135,21 +135,12 @@ async def _extract_and_publish(today, current_records, redis, client):
 
     logger.debug('New bcse data: %s', new_data)
 
-    results = insert_bcse(new_data)
+    insert_bcse(new_data)
 
     if len(new_data) > 0:
         asyncio.create_task(_notify_about_new_bcse(redis, data))
 
-    for r in results:
-        try:
-            r.result()
-        except asyncio.CancelledError as e:
-            raise e
-        except:
-            logger.exception("BCSE rate wasn't saved in cassandra.")
-
-    else:
-        current_records.update([(x.timestamp_operation, x.rate) for x in new_data])
+    current_records.update([(x.timestamp_operation, x.rate) for x in new_data])
 
 
 async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Optional[List[List]]:
