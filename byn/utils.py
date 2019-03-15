@@ -7,6 +7,7 @@ import time
 from decimal import Decimal
 from enum import Enum
 from functools import wraps, partial
+from typing import Container, Union, Type
 
 import aioredis
 
@@ -112,7 +113,45 @@ async def create_redis() -> aioredis.Redis:
 class DecimalAwareEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Decimal):
+            # It was a bad choice, don't do like this. `str` is a better option.
             return float(o)
         if isinstance(o, Enum):
             return o.value
         return super().default(o)
+
+
+def retryable(
+        func,
+        expected_exception: Union[Type[Exception], Container[Type[Exception]]]=(),
+        *,
+        retry_count: int=1
+):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        i = 0
+
+        prev_exceptions = []
+
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except expected_exception as e:
+                prev_exceptions.append(e)
+                if i >= retry_count:
+                    logger.error(
+                        'Got too many exceptions: %s\nRaising the last one.',
+                        prev_exceptions
+                    )
+                    raise e
+
+                logger.info(
+                    'Got expected exception %s while running %s. Retrying. %s attempts left.',
+                    type(e).__name__,
+                    func,
+                    retry_count - i
+                )
+
+                i += 1
+
+    return wrapper
+

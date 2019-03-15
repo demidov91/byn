@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import os
 import threading
 from collections import defaultdict, OrderedDict
@@ -20,11 +21,16 @@ from byn.utils import DecimalAwareEncoder, always_on_sync
 
 
 thread_local = threading.local()
+logger = logging.getLogger(__name__)
 
 @always_on_sync
 def _get_pool():
-    print('Pool initialized!')
-    return happybase.ConnectionPool(size=4, host=os.environ['HBASE_HOST'], timeout=5000, protocol='binary')
+    if 'HBASE_HOST' in os.environ:
+        logger.debug('Pool initialized!')
+        return happybase.ConnectionPool(size=4, host=os.environ['HBASE_HOST'], timeout=5000, protocol='binary')
+    else:
+        logger.debug("Pool won't be initialized.")
+        return None
 
 
 
