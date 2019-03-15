@@ -15,13 +15,17 @@ from celery.signals import worker_process_init
 from happybase.util import bytes_increment
 from happybase.pool import ConnectionPool
 
+import byn.logging
 from byn.datatypes import ExternalRateData, BcseData
+from byn.happybase_retryable import monkeypatch_happybase
 from byn.predict.predictor import PredictionRecord
 from byn.utils import DecimalAwareEncoder, always_on_sync
 
 
+monkeypatch_happybase()
 thread_local = threading.local()
 logger = logging.getLogger(__name__)
+
 
 @always_on_sync
 def _get_pool():

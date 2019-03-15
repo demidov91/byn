@@ -7,7 +7,7 @@ import time
 from decimal import Decimal
 from enum import Enum
 from functools import wraps, partial
-from typing import Container, Union, Type
+from typing import Container, Iterable, Union, Type
 
 import aioredis
 
@@ -121,11 +121,20 @@ class DecimalAwareEncoder(json.JSONEncoder):
 
 
 def retryable(
-        func,
+        func=None,
         expected_exception: Union[Type[Exception], Container[Type[Exception]]]=(),
         *,
-        retry_count: int=1
+        retry_count: int=1,
+        callback=None,
 ):
+    if func is None:
+        return partial(
+            retryable,
+            expected_exception=expected_exception,
+            retry_count=retry_count,
+            callback=callback
+        )
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         i = 0
@@ -134,7 +143,17 @@ def retryable(
 
         while True:
             try:
-                return func(*args, **kwargs)
+                object_to_return = func(*args, **kwargs)
+
+                if isinstance(object_to_return, Iterable):
+                    try:
+                        yield next(object_to_return)
+                    except StopIteration:
+                        return
+                    except GeneratorExit:
+                        pass
+                else:
+                    return object_to_return
             except expected_exception as e:
                 prev_exceptions.append(e)
                 if i >= retry_count:
@@ -145,13 +164,19 @@ def retryable(
                     raise e
 
                 logger.info(
-                    'Got expected exception %s while running %s. Retrying. %s attempts left.',
+                    'Got expected exception %s while running %s. %s attempts left.',
                     type(e).__name__,
-                    func,
+                    func.__name__ if hasattr(func, '__name__') else func,
                     retry_count - i
                 )
 
+                if callback is not None:
+                    callback(*args, **kwargs)
+
                 i += 1
+            else:
+                yield from object_to_return
+                return
 
     return wrapper
 
