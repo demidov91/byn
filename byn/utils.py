@@ -1,10 +1,9 @@
 import asyncio
 import datetime
-import json
 import logging
 import os
+import simplejson
 import time
-from decimal import Decimal
 from enum import Enum
 from functools import wraps, partial
 
@@ -109,11 +108,8 @@ async def create_redis() -> aioredis.Redis:
     return await aioredis.create_redis(os.environ["REDIS_URL"], db=const.REDIS_CACHE_DB)
 
 
-class DecimalAwareEncoder(json.JSONEncoder):
+class EnumAwareEncoder(simplejson.JSONEncoder):
     def default(self, o):
-        if isinstance(o, Decimal):
-            # It was a bad choice, don't do like this. `str` is a better option.
-            return float(o)
         if isinstance(o, Enum):
             return o.value
         return super().default(o)

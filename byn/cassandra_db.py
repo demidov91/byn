@@ -1,5 +1,4 @@
 import datetime
-import json
 import logging
 import os
 import threading
@@ -19,7 +18,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 
 from byn.datatypes import ExternalRateData, BcseData
 from byn.predict.predictor import PredictionRecord
-from byn.utils import DecimalAwareEncoder, always_on_sync
+from byn.utils import EnumAwareEncoder, always_on_sync
 
 
 warnings.warn("Cassandra db usage is under deprecation. Use hbase instead.", DeprecationWarning)
@@ -430,10 +429,10 @@ def insert_prediction_async(
         {
             'date': datetime.datetime.fromtimestamp(timestamp // 1000).date(),
             'timestamp': timestamp,
-            'external_rates': json.dumps(external_rates, cls=DecimalAwareEncoder),
-            'bcse_full': json.dumps(bcse_full, cls=DecimalAwareEncoder),
-            'bcse_trusted_global': json.dumps(bcse_trusted_global, cls=DecimalAwareEncoder),
-            'prediction': json.dumps(asdict(prediction), cls=DecimalAwareEncoder),
+            'external_rates': json.dumps(external_rates, cls=EnumAwareEncoder),
+            'bcse_full': json.dumps(bcse_full, cls=EnumAwareEncoder),
+            'bcse_trusted_global': json.dumps(bcse_trusted_global, cls=EnumAwareEncoder),
+            'prediction': json.dumps(asdict(prediction), cls=EnumAwareEncoder),
         }
     ).add_errback(_handle_async_exception)
 

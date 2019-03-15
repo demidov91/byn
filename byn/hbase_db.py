@@ -1,7 +1,7 @@
 import datetime
-import json
 import logging
 import os
+import simplejson
 import threading
 from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
@@ -19,7 +19,7 @@ import byn.logging
 from byn.datatypes import ExternalRateData, BcseData
 from byn.happybase_retryable import monkeypatch_happybase
 from byn.predict.predictor import PredictionRecord
-from byn.utils import DecimalAwareEncoder, always_on_sync
+from byn.utils import EnumAwareEncoder, always_on_sync
 
 
 monkeypatch_happybase()
@@ -462,10 +462,10 @@ def insert_prediction(
 
     with table('prediction') as prediction_table:
         prediction_table.put(str(timestamp).encode(), {
-            b'rate:external_rates': json.dumps(external_rates, cls=DecimalAwareEncoder).encode(),
-            b'rate:bcse_full': json.dumps(bcse_full, cls=DecimalAwareEncoder).encode(),
-            b'rate:bcse_trusted_global': json.dumps(bcse_trusted_global, cls=DecimalAwareEncoder).encode(),
-            b'rate:prediction': json.dumps(asdict(prediction), cls=DecimalAwareEncoder).encode(),
+            b'rate:external_rates': simplejson.dumps(external_rates, cls=EnumAwareEncoder).encode(),
+            b'rate:bcse_full': simplejson.dumps(bcse_full, cls=EnumAwareEncoder).encode(),
+            b'rate:bcse_trusted_global': simplejson.dumps(bcse_trusted_global, cls=EnumAwareEncoder).encode(),
+            b'rate:prediction': simplejson.dumps(asdict(prediction), cls=EnumAwareEncoder).encode(),
         })
 
 

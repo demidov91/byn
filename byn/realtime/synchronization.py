@@ -1,16 +1,15 @@
 import asyncio
-import json
 import logging
 import math
+import simplejson
 import time
 from typing import Optional
 from dataclasses import asdict
-from decimal import Decimal
 
 from aioredis import Redis
 
 from byn.predict.predictor import PredictionRecord, RidgePredictionRecord
-from byn.utils import create_redis, DecimalAwareEncoder
+from byn.utils import create_redis, EnumAwareEncoder
 from byn.datatypes import PredictCommand, LocalRates
 from byn import constants
 
@@ -71,17 +70,17 @@ async def send_predictor_command(
         command: PredictCommand,
         data: Optional[dict]=None
 ):
-    await redis.rpush(PREDICTOR_COMMAND_QUEUE, json.dumps({
+    await redis.rpush(PREDICTOR_COMMAND_QUEUE, simplejson.dumps({
         'command': command.value,
         'data': data,
-    }, cls=DecimalAwareEncoder))
+    }, cls=EnumAwareEncoder))
 
 
 async def receive_predictor_command(redis: Redis) -> dict:
     message = None
 
     while message is None:
-        message = json.loads((await redis.blpop(PREDICTOR_COMMAND_QUEUE))[1], parse_float=Decimal)
+        message = simplejson.loads((await redis.blpop(PREDICTOR_COMMAND_QUEUE))[1], use_decimal=True)
         expires = message.get('data') and message['data'].pop('expires', None)
         if (
             expires is not None and
@@ -97,7 +96,7 @@ async def receive_predictor_command(redis: Redis) -> dict:
 async def send_prediction(redis: Redis, record: PredictionRecord, *, message_guid):
     data = asdict(record)
     data['message_guid'] = message_guid
-    await redis.rpush(PREDICTION_READY_QUEUE, json.dumps(data, cls=DecimalAwareEncoder))
+    await redis.rpush(PREDICTION_READY_QUEUE, simplejson.dumps(data, cls=EnumAwareEncoder))
 
 
 async def receive_next_prediction(redis: Redis, *, timeout: int) -> Optional[dict]:
@@ -110,7 +109,7 @@ async def receive_next_prediction(redis: Redis, *, timeout: int) -> Optional[dic
     if data is None:
         return None
 
-    return json.loads(data[1])
+    return simplejson.loads(data[1], use_decimal=True)
 
 
 async def predict_with_timeout(redis: Redis, external_rates: LocalRates, *, timeout: float=0.5) -> Optional[PredictionRecord]:
