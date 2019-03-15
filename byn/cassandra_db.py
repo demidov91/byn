@@ -3,12 +3,14 @@ import json
 import logging
 import os
 import threading
+import warnings
 from collections import defaultdict
 from dataclasses import asdict
 from decimal import Decimal
 from functools import partial
 from itertools import chain
 from typing import Collection, Iterable, Union, Tuple, Iterator, Any, Dict, Sequence, Optional, List
+
 
 from celery.signals import worker_process_init, worker_process_shutdown
 from cassandra import ConsistencyLevel
@@ -20,6 +22,7 @@ from byn.predict.predictor import PredictionRecord
 from byn.utils import DecimalAwareEncoder, always_on_sync
 
 
+warnings.warn("Cassandra db usage is under deprecation. Use hbase instead.", DeprecationWarning)
 logger = logging.getLogger(__name__)
 
 CASSANDRA_HOSTS = os.environ['CASSANDRA_HOSTS'].split(',')
@@ -303,13 +306,13 @@ def _execute_in_parallel(query: str, data: Iterable[Union[Iterable, Dict[str, An
         r.result()
 
 
-def insert_nbrb(data):
+def insert_nbrb_rates(rates: Iterable[dict]):
     _execute_in_parallel(
         'INSERT into nbrb '
         '(dummy, date, usd, eur, rub, uah) '
         'VALUES '
         '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
-        data
+        rates
     )
 
 
@@ -339,14 +342,6 @@ def insert_trade_dates(trade_dates: Collection[str]):
     )
 
 
-def insert_nbrb_rates(rates: Iterable[dict]):
-    _execute_in_parallel(
-        'INSERT into nbrb '
-        '(dummy, date, usd, eur, rub, uah) '
-        'VALUES '
-        '(true, %(date)s, %(USD)s, %(EUR)s, %(RUB)s, %(UAH)s) ',
-        rates
-    )
 
 
 def insert_dxy_12MSK(data: Iterable[tuple]):
@@ -407,7 +402,7 @@ def insert_bcse_async(data: Iterable[BcseData], **kwargs):
         'INSERT into bcse (currency, timestamp_operation, timestamp_received, rate) '
         'VALUES (%s, %s, %s, %s)',
         [
-            (row.currency, row.ms_timestamp_operation, row.ms_timestamp_received, row.rate)
+            (row.currency, row.timestamp_operation, row.timestamp_received, row.rate)
             for row in data
         ],
         **kwargs

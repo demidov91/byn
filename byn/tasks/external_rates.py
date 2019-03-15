@@ -5,20 +5,19 @@ Periodical: once a day.
 """
 import datetime
 import json
-from decimal import Decimal
 
 from celery import group
 
 from byn import constants as const
 from byn import forexpf
-from byn.cassandra_db import insert_external_rates, get_last_external_currency_datetime
+from byn.hbase_db import insert_external_rates, get_last_external_currency_datetime
 from byn.tasks.launch import app
 
 
 RESOLUTIONS = (1, 3, 5, 15, 30, 60, 120)
 
 
-@app.task(autoretry_for=(Exception, ))
+@app.task(autoretry_for=(Exception, ), retry_backoff=True)
 def extract_one_currency(start_dt: datetime.datetime, currency: str):
     end_dt = datetime.datetime.now()
     data_to_store = []
@@ -42,15 +41,10 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
         json.dump(data_to_store, f)
 
 
-@app.task(autoretry_for=(Exception, ))
+@app.task(autoretry_for=(Exception, ), retry_backoff=True)
 def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
-        data = json.load(f, parse_float=Decimal)
-
-    for row in data:
-        row[0] = datetime.datetime.fromtimestamp(row[0])
-        for i in (1, 2, 3, 4):
-            row[i] = Decimal(row[i])
+        data = json.load(f, parse_float=str)
 
     insert_external_rates(currency, data)
 

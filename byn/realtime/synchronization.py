@@ -3,7 +3,7 @@ import json
 import logging
 import math
 import time
-from typing import Optional, Union
+from typing import Optional
 from dataclasses import asdict
 from decimal import Decimal
 
@@ -12,6 +12,7 @@ from aioredis import Redis
 from byn.predict.predictor import PredictionRecord, RidgePredictionRecord
 from byn.utils import create_redis, DecimalAwareEncoder
 from byn.datatypes import PredictCommand, LocalRates
+from byn import constants
 
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,17 @@ BCSE = 'BCSE'
 PREDICTOR_COMMAND_QUEUE = 'PREDICTOR_COMMAND'
 PREDICTION_READY_QUEUE = 'PREDICTION_READY'
 
+
 async def start():
-    await (await create_redis()).hmset_dict(WAIT_KEY, {
+    redis = await create_redis()
+
+    await redis.hmset_dict(WAIT_KEY, {
         EXTERNAL_HISTORY: 0,
         EXTERNAL_LIVE: 0,
         BCSE: 0,
     })
+
+    await redis.delete(*constants.FOREXPF_CURRENCIES_TO_LISTEN)
 
 
 async def wait_for_data_threads():
@@ -42,6 +48,16 @@ async def wait_for_data_threads():
             await asyncio.sleep(1)
         else:
             break
+
+
+async def wait_for_any_data_thread(data_thread_keys):
+    redis = await create_redis()
+
+    while True:
+        if any(x == b'1' for x in (await redis.hmget(WAIT_KEY, *data_thread_keys))):
+            return
+        logger.debug('Waiting for any of %s to proceed.', data_thread_keys)
+        await asyncio.sleep(1)
 
 
 async def mark_as_ready(thread_name: str):

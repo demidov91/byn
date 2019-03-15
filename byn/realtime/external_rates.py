@@ -9,7 +9,7 @@ from asyncio.queues import Queue
 from aiohttp.client import ClientSession, ClientTimeout
 
 from byn import constants as const
-from byn.cassandra_db import insert_external_rate_live_async
+from byn.hbase_db import insert_external_rate_live
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
 from byn.utils import always_on_coroutine, create_redis
@@ -131,14 +131,14 @@ async def _worker(queue: Queue):
         data = await queue.get()    # type: ExternalRateData
         logger.debug(data)
 
-        # Send to cassandra.
-        insert_external_rate_live_async(data)
+        # Persist.
+        insert_external_rate_live(data)
         
         # Save in redis.
         try:
             await redis_client.mset(
                 data.currency, data.close,
-                f'{data.currency}_ms_timestamp', int(data.timestamp_received * 1000)
+                f'{data.currency}_timestamp', int(data.timestamp_received)
             )
         except asyncio.CancelledError as e:
             raise e

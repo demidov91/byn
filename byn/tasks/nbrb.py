@@ -21,21 +21,21 @@ from byn import forexpf
 from byn.datatypes import PredictCommand
 from byn.tasks.launch import app
 from byn.tasks.daily_predict import daily_predict
-from byn.cassandra_db import (
-    get_last_nbrb_rates,
-    get_last_nbrb_local_rates,
-    get_last_nbrb_global_record,
+from byn.hbase_db import (
+    add_nbrb_global,
+    get_last_nbrb_record,
     get_last_nbrb_global_with_rates,
     get_last_rolling_average_date,
     get_nbrb_gt,
-    get_nbrb_local_gt,
-    get_nbrb_global_gt,
-    insert_trade_dates,
-    insert_nbrb_rates,
+    insert_nbrb,
     insert_nbrb_local,
-    add_nbrb_global,
-    insert_dxy_12MSK,
+    insert_trade_dates,
     insert_rolling_average,
+    insert_dxy_12MSK,
+    key_part,
+    key_part_as_date,
+    get_decimal,
+    NbrbKind,
 )
 from byn.utils import create_redis
 from byn.realtime.synchronization import send_predictor_command
@@ -78,7 +78,10 @@ def update_nbrb_rates_async(need_last_date=True):
     )()
 
 
-@app.task
+@app.task(
+    autoretry_for=(Exception, ),
+    retry_backoff=True,
+)
 def load_trade_dates() -> Sequence[str]:
     dates = client.get(TRADE_DATES_URL).json()
     insert_trade_dates(dates)
@@ -92,12 +95,12 @@ def load_trade_dates() -> Sequence[str]:
     retry_kwargs={'max_retries': 3 * 24 * 2},
 )
 def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Iterable[Dict[str, str]]:
-    record = get_last_nbrb_rates()
+    record = get_last_nbrb_record(NbrbKind.OFFICIAL)
     if record is None:
         logger.error('No nbrb rates!')
         return ()
 
-    date_to_start = record.date.date() + datetime.timedelta(days=2)
+    date_to_start = key_part_as_date(record[0], 1) + datetime.timedelta(days=2)
     date_to_end = datetime.date.today() + datetime.timedelta(days=1)
 
     if date_to_end < date_to_start:
@@ -132,17 +135,20 @@ def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Itera
 
 
 
-@app.task
+@app.task(
+    autoretry_for=(Exception, ),
+    retry_backoff=True,
+)
 def load_dxy_12MSK() -> Tuple[Iterable]:
-    record = get_last_nbrb_global_record()
-    date = record and record.date.date()
-    dates = [x.date.date() for x in get_nbrb_gt(date)]
+    record = get_last_nbrb_record(NbrbKind.GLOBAL)
+    date = record and key_part_as_date(record[0], 1)
+    dates = [key_part_as_date(x[0], 1) for x in get_nbrb_gt(date, kind=NbrbKind.OFFICIAL)]
 
     if len(dates) == 0:
         return ()
 
-    start_date = dates[-1]
-    end_date = dates[0] + datetime.timedelta(days=1)
+    start_date = dates[0]
+    end_date = dates[-1] + datetime.timedelta(days=1)
 
     raw_data = forexpf.get_data(
         currency='DXY',
@@ -158,7 +164,7 @@ def load_dxy_12MSK() -> Tuple[Iterable]:
 
     timestamps = [[datetime.datetime(x.year, x.month, x.day, 12).timestamp()] for x in dates]
     dates = [x.isoformat() for x in dates]
-    rate_pairs = tuple(zip(dates, [Decimal(x) for x in dxy_regressor.predict(timestamps)]))
+    rate_pairs = tuple(zip(dates, [str(x) for x in dxy_regressor.predict(timestamps)]))
 
     insert_dxy_12MSK(rate_pairs)
 
@@ -167,17 +173,17 @@ def load_dxy_12MSK() -> Tuple[Iterable]:
 
 @app.task
 def load_nbrb_local() -> Tuple[dict]:
-    record = get_last_nbrb_local_rates()
-    date = record and record.date.date()
+    record = get_last_nbrb_record(NbrbKind.LOCAL)
+    date = record and key_part_as_date(record[0], 1)
 
-    clean_data = get_nbrb_gt(date)
+    clean_data = get_nbrb_gt(date, NbrbKind.OFFICIAL)
 
     data = tuple({
-        'date': x.date,
-        'USD': x.usd,
-        'EUR': x.usd / x.eur,
-        'RUB': x.usd / x.rub * 100,
-        'UAH': x.usd / x.uah * 100,
+        'date': key_part(x[0], 1),
+        'USD': get_decimal(x[1], b'rate:usd'),
+        'EUR': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:eur'),
+        'RUB': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:rub') * 100,
+        'UAH': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:uah') * 100,
     } for x in clean_data)
     insert_nbrb_local(data)
     return data
@@ -186,17 +192,17 @@ def load_nbrb_local() -> Tuple[dict]:
 @app.task
 def load_nbrb_global():
     record = get_last_nbrb_global_with_rates()
-    date = record and record.date.date()
+    date = record and key_part_as_date(record[0], 1)
 
-    nbrb_local = get_nbrb_local_gt(date)
-    dxy = {x.date: x.dxy for x in get_nbrb_global_gt(date)}
+    nbrb_local = get_nbrb_gt(date, kind=NbrbKind.LOCAL)
+    dxy = {key_part(x[0], 1): get_decimal(x[1], b'rate:dxy') for x in get_nbrb_gt(date, kind=NbrbKind.GLOBAL)}
 
     data = tuple({
-        'date': x.date,
-        'BYN': x.usd / dxy[x.date],
-        'EUR': x.eur / dxy[x.date],
-        'RUB': x.rub / dxy[x.date],
-        'UAH': x.uah / dxy[x.date],
+        'date': key_part(x[0], 1),
+        'BYN': get_decimal(x[1], b'rate:usd') / dxy[key_part(x[0], 1)],
+        'EUR': get_decimal(x[1], b'rate:eur') / dxy[key_part(x[0], 1)],
+        'RUB': get_decimal(x[1], b'rate:rub') / dxy[key_part(x[0], 1)],
+        'UAH': get_decimal(x[1], b'rate:uah') / dxy[key_part(x[0], 1)],
     } for x in nbrb_local)
 
     add_nbrb_global(data)
@@ -207,24 +213,32 @@ def load_nbrb_global():
 
 @app.task
 def load_nbrb(rates):
-    cass_rates = defaultdict(dict)
+    db_rates = defaultdict(dict)
     for rate in rates:
-        cass_rates[rate['Date']][rate['cur']] = Decimal(rate['rate'])
+        db_rates[rate['Date']][rate['cur']] = Decimal(rate['rate'])
 
-    for date, rates in cass_rates.items():
+    for date, rates in db_rates.items():
         rates['date'] = date
 
-    data = tuple(cass_rates.values())
-    insert_nbrb_rates(data)
+    data = tuple(db_rates.values())
+    insert_nbrb(data)
     return data
 
 
 @app.task
 def load_rolling_average():
     last_rolling_average_date = get_last_rolling_average_date()
-    data = tuple(get_nbrb_global_gt(0))[::-1]
-    dates = [x[1].date() for x in data]
-    rates = np.array([(x.eur, x.rub, x.uah, x.dxy) for x in data])
+    keys, values = zip(*get_nbrb_gt(None, kind=NbrbKind.GLOBAL))
+    dates = [key_part_as_date(key, 1) for key in keys]
+    rates = np.array([
+        (
+            get_decimal(x, b'rate:eur'),
+            get_decimal(x, b'rate:rub'),
+            get_decimal(x, b'rate:uah'),
+            get_decimal(x, b'rate:dxy'),
+        )
+        for x in values
+    ])
 
     if last_rolling_average_date is None:
         start_index = 0
@@ -265,10 +279,3 @@ def nbrb_file_to_cassandra():
         data = json.load(f)
 
     load_nbrb(data)
-
-
-def dxy_12MSK_to_cassandra():
-    with open(const.DXY_12MSK_DARA, mode='rt') as f:
-        data = json.load(f)
-
-    insert_dxy_12MSK([(x[0], Decimal(x[1])) for x in data])

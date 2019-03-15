@@ -13,8 +13,7 @@ from byn.predict_utils import build_predictor
 from byn.predict.predictor import Predictor
 from byn.predict.utils import build_trust_array
 from byn.datatypes import LocalRates, PredictCommand
-from byn.cassandra_db import get_bcse_in, insert_prediction_async
-from byn.predict.utils import ignore_containing_nan
+from byn.hbase_db import insert_prediction, get_bcse_in
 from byn.realtime.synchronization import (
     wait_for_data_threads,
     receive_predictor_command,
@@ -47,11 +46,10 @@ async def run():
 
         if predictor.meta.last_date < today:
             start_dt = datetime.datetime.fromordinal(today.toordinal())
-            bcse_data = np.array([
-                (int(dt.timestamp()), Decimal(rate))
-                for dt, rate in
-                get_bcse_in('USD', start_dt=start_dt)
-            ], dtype=np.dtype(object))
+            bcse_data = np.array(
+                tuple(get_bcse_in('USD', start_dt=start_dt)),
+                dtype=np.dtype(object)
+            )
 
             todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
 
@@ -66,7 +64,7 @@ async def run():
 
             elif command == PredictCommand.NEW_BCSE:
                 bcse_data = np.array([
-                    (ts // 1000, rate) for ts, rate in message['data']['rates']
+                    (ts, rate) for ts, rate in message['data']['rates']
                 ], dtype=np.dtype(object))
 
                 todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
@@ -84,7 +82,7 @@ async def run():
 
                 await send_prediction(redis, prediction, message_guid=message_guid)
 
-                insert_prediction_async(
+                insert_prediction(
                     timestamp=message_guid,
                     external_rates=data,
                     bcse_full=todays_bcse_config.bcse_full,

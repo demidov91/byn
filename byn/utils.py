@@ -112,7 +112,12 @@ async def create_redis() -> aioredis.Redis:
 class DecimalAwareEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Decimal):
+            # It was a bad choice, don't do like this. `str` is a better option.
             return float(o)
         if isinstance(o, Enum):
             return o.value
         return super().default(o)
+
+
+
+

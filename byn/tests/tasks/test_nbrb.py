@@ -4,7 +4,7 @@ from unittest import mock
 from byn.tasks import nbrb
 
 
-@mock.patch('byn.tasks.nbrb.insert_nbrb_rates')
+@mock.patch('byn.tasks.nbrb.insert_nbrb')
 def test_load_nbrb(patched):
     source = [
         {"Date": "2015-11-02", "cur": "USD", "rate": "1.7421"},

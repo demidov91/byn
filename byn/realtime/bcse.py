@@ -13,7 +13,7 @@ from aiohttp.client import ClientSession
 from aioredis import Redis
 
 import byn.constants as const
-from byn.cassandra_db import insert_bcse_async, get_bcse_in
+from byn.hbase_db import insert_bcse, get_bcse_in
 from byn.datatypes import BcseData, PredictCommand
 from byn.utils import always_on_coroutine, create_redis
 from byn.realtime.synchronization import (
@@ -89,13 +89,10 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
 
 
 def _build_initial_current_records(today: datetime.date):
-    return OrderedDict((
-        (int(dt.timestamp() * 1000), rate)
-        for dt, rate in get_bcse_in(
-            'USD',
-            _get_todays_bcse_start(today),
-            datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
-        )
+    return OrderedDict(get_bcse_in(
+        'USD',
+        _get_todays_bcse_start(today),
+        datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
     ))
 
 
@@ -122,14 +119,14 @@ async def _extract_and_publish(today, current_records, redis, client):
     if data is None:
         return
 
-    data = [(dt - 60 * 60 * const.FIX_BCSE_TIMESTAMP * 1000, rate) for dt, rate in data]
-    current_ms_timestamp = int(datetime.datetime.now().timestamp() * 1000)
+    data = [(dt // 1000 - 60 * 60 * const.FIX_BCSE_TIMESTAMP, rate) for dt, rate in data]
+    current_timestamp = int(datetime.datetime.now().timestamp())
 
     new_data = [
         BcseData(
             currency='USD',
-            ms_timestamp_operation=dt,
-            ms_timestamp_received=current_ms_timestamp,
+            timestamp_operation=dt,
+            timestamp_received=current_timestamp,
             rate=rate
         )
         for dt, rate in data
@@ -138,24 +135,12 @@ async def _extract_and_publish(today, current_records, redis, client):
 
     logger.debug('New bcse data: %s', new_data)
 
-    results = insert_bcse_async(new_data, timeout=1)
-    success = await _publish_bcse_in_redis(redis, data=data)
-    if not success:
-        return
+    insert_bcse(new_data)
 
     if len(new_data) > 0:
         asyncio.create_task(_notify_about_new_bcse(redis, data))
 
-    for r in results:
-        try:
-            r.result()
-        except asyncio.CancelledError as e:
-            raise e
-        except:
-            logger.exception("BCSE rate wasn't saved in cassandra.")
-
-    else:
-        current_records.update([(x.ms_timestamp_operation, x.rate) for x in new_data])
+    current_records.update([(x.timestamp_operation, x.rate) for x in new_data])
 
 
 async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Optional[List[List]]:
@@ -185,24 +170,6 @@ async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Opt
         logger.debug('Empty bcse data.')
 
     return required_raw_data_item.get('data')
-
-
-async def _publish_bcse_in_redis(
-        redis: Redis,
-        *,
-        data: Sequence[Sequence]
-):
-
-    str_data = json.dumps(data)
-    try:
-        await redis.set(const.BCSE_USD_REDIS_KEY, str_data)
-    except asyncio.CancelledError as e:
-        raise e
-    except:
-        logger.error("Couldn't publish bcse rates in redis.")
-        return False
-    else:
-        return True
 
 
 @always_on_coroutine
