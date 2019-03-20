@@ -36,7 +36,7 @@ def always_on_coroutine(coro=None, expected_exceptions=()):
 
             except Exception as e:
                 current_time = datetime.datetime.now()
-                if current_time - start_time < datetime.timedelta(seconds=10):
+                if current_time - start_time < datetime.timedelta(seconds=60):
                     retry_counter += 1
                 else:
                     retry_counter = 1
@@ -81,7 +81,7 @@ def always_on_sync(func=None, expected_exceptions=()):
 
             except Exception as e:
                 current_time = datetime.datetime.now()
-                if current_time - start_time < datetime.timedelta(seconds=10):
+                if current_time - start_time < datetime.timedelta(seconds=60):
                     retry_counter += 1
                 else:
                     retry_counter = 1
