@@ -27,11 +27,6 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
 
-    cpus: 0.5
-    mem_limit: 128m
-    memswap_limit: 256m
-
-
   celery:
     build:
       context: .
@@ -54,25 +49,18 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
     depends_on:
-      - hbase-master
+      - postgres
       - redis
-    cpus: 0.5
-    mem_limit: 128m
-    memswap_limit: 256m
 
   redis:
     image: "redis:5-alpine3.8"
     ports:
       - "${HOST_REDIS_PORT:-6379}:6379"
 
-  hbase-master:
-    image: "dajobe/hbase"
+  postgres:
+    image: "postgres:11-alpine"
     ports:
-      - "9090:9090"
-      - "16010:16010"
+      - "${HOST_POSTGRES_PORT:-6432}:5432"
+
     volumes:
-      - ./mount/hbase-master:/data
-    restart: on-failure
-    cpus: 0.5
-    mem_limit: 512m
-    memswap_limit: 512m
+      - ./mount/postgres:/var/lib/postgresql/data
