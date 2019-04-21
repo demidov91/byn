@@ -21,20 +21,15 @@ from byn import forexpf
 from byn.datatypes import PredictCommand
 from byn.tasks.launch import app
 from byn.tasks.daily_predict import daily_predict
-from byn.hbase_db import (
-    add_nbrb_global,
+from byn.postgres_db import (
     get_last_nbrb_record,
     get_last_nbrb_global_with_rates,
     get_last_rolling_average_date,
     get_nbrb_gt,
     insert_nbrb,
-    insert_nbrb_local,
     insert_trade_dates,
     insert_rolling_average,
     insert_dxy_12MSK,
-    key_part,
-    key_part_as_date,
-    get_decimal,
     NbrbKind,
 )
 from byn.utils import create_redis

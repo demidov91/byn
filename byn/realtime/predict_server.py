@@ -2,18 +2,19 @@
 Coroutine which listens for a command redis queue
     predicting rates and rebuilding the model whenever required by a queue command.
 """
+import asyncio
 import datetime
 import logging
 from decimal import Decimal
 
 import numpy as np
 
-from byn.utils import always_on_coroutine, create_redis
+from byn.utils import always_on_coroutine, create_redis, atuple
 from byn.predict_utils import build_predictor
 from byn.predict.predictor import Predictor
 from byn.predict.utils import build_trust_array
 from byn.datatypes import LocalRates, PredictCommand
-from byn.hbase_db import insert_prediction, get_bcse_in
+from byn.postgres_db import insert_prediction, get_bcse_in
 from byn.realtime.synchronization import (
     wait_for_data_threads,
     receive_predictor_command,
@@ -47,7 +48,7 @@ async def run():
         if predictor.meta.last_date < today:
             start_dt = datetime.datetime.fromordinal(today.toordinal())
             bcse_data = np.array(
-                tuple(get_bcse_in('USD', start_dt=start_dt)),
+                await atuple(get_bcse_in('USD', start_dt=start_dt)),
                 dtype=np.dtype(object)
             )
 
@@ -82,13 +83,13 @@ async def run():
 
                 await send_prediction(redis, prediction, message_guid=message_guid)
 
-                insert_prediction(
+                asyncio.create_task(insert_prediction(
                     timestamp=message_guid,
                     external_rates=data,
                     bcse_full=todays_bcse_config.bcse_full,
                     bcse_trusted_global=todays_bcse_config.bcse_trusted_global,
-                    prediction=prediction,
-                )
+                    prediction_record=prediction,
+                ))
 
 
 

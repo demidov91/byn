@@ -8,7 +8,7 @@ import json
 import logging
 
 from byn import constants as const
-from byn.hbase_db import (
+from byn.postgres_db import (
     get_the_last_external_rates,
 )
 from byn.datatypes import LocalRates
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def predict_scheduler():
     await wait_for_any_data_thread([EXTERNAL_HISTORY, EXTERNAL_LIVE])
 
-    raw_input_data = get_the_last_external_rates(
+    raw_input_data = await get_the_last_external_rates(
         const.FOREXPF_CURRENCIES_TO_LISTEN,
         datetime.datetime.now()
     )

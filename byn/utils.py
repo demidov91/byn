@@ -119,5 +119,10 @@ class DecimalAwareEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+async def alist(coro) -> list:
+    return [x async for x in coro]
 
+
+async def atuple(coro) -> tuple:
+    return tuple(await alist(coro))
 

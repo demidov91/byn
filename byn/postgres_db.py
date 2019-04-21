@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import logging
 import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -15,6 +16,7 @@ from byn.datatypes import BcseData, ExternalRateData
 from byn.predict.predictor import PredictionRecord
 
 
+logger = logging.getLogger(__name__)
 metadata = sa.MetaData()
 
 external_rate = sa.Table('external_rate', metadata,
@@ -90,11 +92,23 @@ DB_DATA = {
 
 
 async def init_pool():
-    sa.create_engine('postgresql://{user}:{password}@{host}:{port}/{database}'.format(**DB_DATA))
-    metadata.create_all()
-    return await aiopg.create_pool(
-        'dbname={database} user={user} password={password} host={host} port={port}'.format(**DB_DATA)
-    )
+    try:
+        metadata.create_all(
+            sa.create_engine(
+                'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**DB_DATA)
+            )
+        )
+    except:
+        logger.exception("Can't initialize db.")
+        return None
+
+    try:
+        return await aiopg.create_pool(
+            'dbname={database} user={user} password={password} host={host} port={port}'.format(**DB_DATA)
+        )
+    except:
+        logger.exception("Can't initialize pool.")
+        return None
 
 
 pool = asyncio.run(init_pool())
@@ -202,7 +216,7 @@ async def get_nbrb_lte(date: datetime.date, kind: NbrbKind):
 
 async def get_valid_nbrb_gt(date: datetime.date, kind: NbrbKind):
     async with pool_cursor() as cur:
-        return cur.execute(
+        return await cur.execute(
             nbrb.select(
                 (nbrb.c.date > date) &
                 (nbrb.c.kind == kind.value) &

@@ -1,10 +1,11 @@
+import asyncio
 import datetime
 import logging
 from itertools import chain
 
 import numpy as np
 
-from byn.hbase_db import (
+from byn.postgres_db import (
     get_latest_external_rates,
     get_external_rate_live,
 )
@@ -28,12 +29,7 @@ class BcseConverter:
             return
 
         start_dt = datetime.datetime.fromtimestamp(new_bcse[0][0])
-
-        external_live_data = get_external_rate_live(start_dt=start_dt - datetime.timedelta(minutes=1))
-        external_historical_data = get_latest_external_rates(start_dt=start_dt, at_least_one=True)
-        external_rates_extractor = RatesDetailedExtractor(
-            _join_external_rates(external_live_data, external_historical_data)
-        )
+        external_rates_extractor = asyncio.run(build_rates_extractor(start_dt))
 
         for point in new_bcse:
             self.resolved_bcse_rates[point[0]] = external_rates_extractor.get_by_timestamp(point[0])
@@ -50,6 +46,14 @@ class BcseConverter:
     def convert(self, bcse_pairs):
         self.update(bcse_pairs)
         return [self.resolved_bcse_rates[x] for x in bcse_pairs]
+
+
+async def build_rates_extractor(start_dt: datetime.datetime):
+    external_live_data = await get_external_rate_live(start_dt=start_dt - datetime.timedelta(minutes=1))
+    external_historical_data = await get_latest_external_rates(start_dt=start_dt, at_least_one=True)
+    return RatesDetailedExtractor(
+        _join_external_rates(external_live_data, external_historical_data)
+    )
 
 
 def _join_external_rates(one, two):
