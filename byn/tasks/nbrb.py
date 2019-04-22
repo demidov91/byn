@@ -33,7 +33,11 @@ from byn.postgres_db import (
     NbrbKind,
 )
 from byn.utils import create_redis, atuple
-from byn.realtime.synchronization import send_predictor_command
+from byn.realtime.synchronization import (
+    NBRB,
+    mark_as_ready,
+    send_predictor_command,
+)
 
 
 client = requests.Session()
@@ -283,6 +287,7 @@ def load_rolling_average():
 def notify_predictor():
     async def _notify_predictor():
         redis = await create_redis()
+        await mark_as_ready(NBRB)
         await send_predictor_command(redis, PredictCommand.REBUILD)
 
     asyncio.run(_notify_predictor())
