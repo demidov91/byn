@@ -32,7 +32,7 @@ from byn.postgres_db import (
     insert_dxy_12MSK,
     NbrbKind,
 )
-from byn.utils import create_redis
+from byn.utils import create_redis, atuple
 from byn.realtime.synchronization import send_predictor_command
 
 
@@ -79,7 +79,7 @@ def update_nbrb_rates_async(need_last_date=True):
 )
 def load_trade_dates() -> Sequence[str]:
     dates = client.get(TRADE_DATES_URL).json()
-    insert_trade_dates(dates)
+    asyncio.run(insert_trade_dates(dates))
     return dates[-50:]
 
 
@@ -90,12 +90,12 @@ def load_trade_dates() -> Sequence[str]:
     retry_kwargs={'max_retries': 3 * 24 * 2},
 )
 def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Iterable[Dict[str, str]]:
-    record = get_last_nbrb_record(NbrbKind.OFFICIAL)
+    record = asyncio.run(get_last_nbrb_record(NbrbKind.OFFICIAL))
     if record is None:
         logger.error('No nbrb rates!')
         return ()
 
-    date_to_start = key_part_as_date(record[0], 1) + datetime.timedelta(days=2)
+    date_to_start = record.date + datetime.timedelta(days=2)
     date_to_end = datetime.date.today() + datetime.timedelta(days=1)
 
     if date_to_end < date_to_start:
@@ -135,9 +135,11 @@ def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Itera
     retry_backoff=True,
 )
 def load_dxy_12MSK() -> Tuple[Iterable]:
-    record = get_last_nbrb_record(NbrbKind.GLOBAL)
-    date = record and key_part_as_date(record[0], 1)
-    dates = [key_part_as_date(x[0], 1) for x in get_nbrb_gt(date, kind=NbrbKind.OFFICIAL)]
+    record = asyncio.run(get_last_nbrb_record(NbrbKind.GLOBAL))
+    date = record and record.date
+    dates = [x.date for x in asyncio.run(
+        atuple(get_nbrb_gt(date, kind=NbrbKind.OFFICIAL))
+    )]
 
     if len(dates) == 0:
         return ()
@@ -161,48 +163,57 @@ def load_dxy_12MSK() -> Tuple[Iterable]:
     dates = [x.isoformat() for x in dates]
     rate_pairs = tuple(zip(dates, [str(x) for x in dxy_regressor.predict(timestamps)]))
 
-    insert_dxy_12MSK(rate_pairs)
+    asyncio.run(insert_dxy_12MSK(rate_pairs))
 
     return rate_pairs
 
 
 @app.task
 def load_nbrb_local() -> Tuple[dict]:
-    record = get_last_nbrb_record(NbrbKind.LOCAL)
-    date = record and key_part_as_date(record[0], 1)
+    async def _implementation():
+        record = await get_last_nbrb_record(NbrbKind.LOCAL)
+        date = record and record.date
 
-    clean_data = get_nbrb_gt(date, NbrbKind.OFFICIAL)
+        clean_data = await get_nbrb_gt(date, NbrbKind.OFFICIAL)
 
-    data = tuple({
-        'date': key_part(x[0], 1),
-        'USD': get_decimal(x[1], b'rate:usd'),
-        'EUR': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:eur'),
-        'RUB': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:rub') * 100,
-        'UAH': get_decimal(x[1], b'rate:usd') / get_decimal(x[1], b'rate:uah') * 100,
-    } for x in clean_data)
-    insert_nbrb_local(data)
-    return data
+        data = tuple({
+            'date': x.date,
+            'USD': x.usd,
+            'EUR': x.usd / x.eur,
+            'RUB': x.usd / x.rub * 100,
+            'UAH': x.usd / x.uah * 100,
+        } async for x in clean_data)
+
+        await insert_nbrb(data, kind=NbrbKind.LOCAL)
+        return data
+
+    return asyncio.run(_implementation())
 
 
 @app.task
 def load_nbrb_global():
-    record = get_last_nbrb_global_with_rates()
-    date = record and key_part_as_date(record[0], 1)
+    async def _implementation():
+        record = await get_last_nbrb_global_with_rates()
+        date = record and record.date
 
-    nbrb_local = get_nbrb_gt(date, kind=NbrbKind.LOCAL)
-    dxy = {key_part(x[0], 1): get_decimal(x[1], b'rate:dxy') for x in get_nbrb_gt(date, kind=NbrbKind.GLOBAL)}
+        nbrb_local = await get_nbrb_gt(date, kind=NbrbKind.LOCAL)
+        dxy = {
+            x.date: x.dxy
+            async for x in get_nbrb_gt(date, kind=NbrbKind.GLOBAL)
+        }
 
-    data = tuple({
-        'date': key_part(x[0], 1),
-        'BYN': get_decimal(x[1], b'rate:usd') / dxy[key_part(x[0], 1)],
-        'EUR': get_decimal(x[1], b'rate:eur') / dxy[key_part(x[0], 1)],
-        'RUB': get_decimal(x[1], b'rate:rub') / dxy[key_part(x[0], 1)],
-        'UAH': get_decimal(x[1], b'rate:uah') / dxy[key_part(x[0], 1)],
-    } for x in nbrb_local)
+        data = tuple({
+            'date': x.date,
+            'BYN': x.usd / dxy[x.date],
+            'EUR': x.eur / dxy[x.date],
+            'RUB': x.rub / dxy[x.date],
+            'UAH': x.uah / dxy[x.date],
+        } async for x in nbrb_local)
 
-    add_nbrb_global(data)
+        await insert_nbrb(data, kind=NbrbKind.GLOBAL)
+        return data
 
-    return data
+    return asyncio.run(_implementation())
 
 
 
@@ -215,25 +226,25 @@ def load_nbrb(rates):
     for date, rates in db_rates.items():
         rates['date'] = date
 
-    data = tuple(db_rates.values())
-    insert_nbrb(data)
+    data = db_rates.values()
+    asyncio.run(insert_nbrb(data, kind=NbrbKind.OFFICIAL))
     return data
 
 
 @app.task
 def load_rolling_average():
-    last_rolling_average_date = get_last_rolling_average_date()
-    keys, values = zip(*get_nbrb_gt(None, kind=NbrbKind.GLOBAL))
-    dates = [key_part_as_date(key, 1) for key in keys]
-    rates = np.array([
-        (
-            get_decimal(x, b'rate:eur'),
-            get_decimal(x, b'rate:rub'),
-            get_decimal(x, b'rate:uah'),
-            get_decimal(x, b'rate:dxy'),
-        )
-        for x in values
-    ])
+
+
+    last_rolling_average_date = asyncio.run(get_last_rolling_average_date())
+    nbrb_rows = asyncio.run(atuple(get_nbrb_gt(None, kind=NbrbKind.GLOBAL)))
+
+    dates = [x.date for x in nbrb_rows]
+    rates = np.array([(
+        x.eur,
+        x.rub,
+        x.uah,
+        x.dxy,
+    ) for x in nbrb_rows])
 
     if last_rolling_average_date is None:
         start_index = 0
@@ -254,10 +265,18 @@ def load_rolling_average():
                     Decimal(np.mean(rates[i - duration + 1:i+1, data_column]))
                 )
 
+    mass_insert = []
+
     for date in rolling_averages:
         for duration in const.ROLLING_AVERAGE_DURATIONS:
             if rolling_averages[date][duration]:
-                insert_rolling_average(date, duration, rolling_averages[date][duration])
+                mass_insert.append(
+                    insert_rolling_average(
+                        date, duration, rolling_averages[date][duration]
+                    )
+                )
+
+    asyncio.run(asyncio.gather(*mass_insert))
 
 
 @app.task
