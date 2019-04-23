@@ -89,11 +89,11 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
 
 
 async def _build_initial_current_records(today: datetime.date):
-    return OrderedDict(await atuple(get_bcse_in(
+    return OrderedDict(await get_bcse_in(
         'USD',
         _get_todays_bcse_start(today),
         datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
-    )))
+    ))
 
 
 @always_on_coroutine

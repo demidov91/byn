@@ -36,26 +36,19 @@ async def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tu
     x = []
     y = []
 
-    future_nbrb = asyncio.create_task(get_nbrb_lte(date, NbrbKind.GLOBAL))
-    future_rolling = asyncio.create_task(get_rolling_average_lte(date))
-
-    rates = await future_nbrb
-    rolling_averages = await future_rolling
-
-
     ##############
 
     rates_as_dict = {}
     byn_rates = {}
 
-    async for row in rates:
+    for row in await get_nbrb_lte(date, NbrbKind.GLOBAL):
         rates_as_dict[row.date] = [row[x] for x in EXTERNAL_RATES_COLUMNS]
         byn_rates[row.date] = row.byn
 
 
     rolling_averages_as_dict = defaultdict(dict)
 
-    async for row in rolling_averages:
+    for row in await get_rolling_average_lte(date):
         rolling_averages_as_dict[row.date][row.duration] = [
             row[column] for column in EXTERNAL_RATES_COLUMNS
         ]

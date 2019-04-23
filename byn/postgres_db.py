@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import logging
 import os
@@ -15,6 +14,10 @@ from sqlalchemy.dialects.postgresql import insert as psql_insert
 
 from byn.datatypes import BcseData, ExternalRateData
 from byn.predict.predictor import PredictionRecord
+from byn.utils import (
+    anext,
+    atuple,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -135,19 +138,6 @@ class NbrbKind(Enum):
     GLOBAL = 'global'
 
 
-_not_set = object()
-
-async def anext(async_iter, default=_not_set):
-    try:
-        return async_iter.__aiter__().__anext__()
-    except StopAsyncIteration as e:
-        if default is _not_set:
-            raise e
-
-        return default
-
-
-
 ############# SELECT ############
 async def get_last_nbrb_record(kind: NbrbKind):
     async with connection() as cur:
@@ -198,34 +188,34 @@ async def get_last_rolling_average_date() -> Optional[datetime.date]:
 
     return row and row.date
 
-async def get_rolling_average_lte(date: datetime.date):
+async def get_rolling_average_lte(date: datetime.date) -> Tuple:
     async with connection() as cur:
-        return await cur.execute(
+        return await atuple(cur.execute(
             rolling_average.select(rolling_average.c.date <= date)
             .order_by(rolling_average.c.date)
-        )
+        ))
 
 
-async def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind):
+async def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind) -> Tuple:
     async with connection() as cur:
-        return await cur.execute(
+        return await atuple(cur.execute(
             nbrb.select((nbrb.c.date > date) & (nbrb.c.kind == kind)).order_by(nbrb.c.date)
-        )
+        ))
 
 
-async def get_nbrb_lte(date: datetime.date, kind: NbrbKind):
+async def get_nbrb_lte(date: datetime.date, kind: NbrbKind) -> Tuple:
     async with connection() as cur:
-        return await cur.execute(
+        return await atuple(cur.execute(
             nbrb.select(
                 (nbrb.c.date <= date) &
                 (nbrb.c.kind == kind.value)
             ).order_by(nbrb.c.date)
-        )
+        ))
 
 
-async def get_valid_nbrb_gt(date: datetime.date, kind: NbrbKind):
+async def get_valid_nbrb_gt(date: datetime.date, kind: NbrbKind) -> Tuple:
     async with connection() as cur:
-        return await cur.execute(
+        return await atuple(cur.execute(
             nbrb.select(
                 (nbrb.c.date > date) &
                 (nbrb.c.kind == kind.value) &
@@ -233,7 +223,7 @@ async def get_valid_nbrb_gt(date: datetime.date, kind: NbrbKind):
                 (nbrb.c.rub != None) &
                 (nbrb.c.uah != None)
             ).order_by(nbrb.c.date)
-        )
+        ))
 
 
 
@@ -244,14 +234,18 @@ async def get_bcse_in(
 ) -> Iterable[Tuple[int, Decimal]]:
     end_dt = end_dt or datetime.datetime(2035, 1, 1)
 
+    start_dt = start_dt.timestamp()
+    end_dt = end_dt.timestamp()
+
     async with connection() as cur:
-        return await cur.execute(
-            bcse.select([bcse.c.timestamp, bcse.c.rate])
+        return await atuple(cur.execute(
+            sa.select([bcse.c.timestamp, bcse.c.rate])
+            .select_from(bcse)
             .where(
                 (bcse.c.currency == currency) &
                 (bcse.c.timestamp >= start_dt) &
                 (bcse.c.timestamp < end_dt))
-        )
+        ))
 
 
 async def get_external_rate_live(start_dt: datetime.datetime,
@@ -260,6 +254,8 @@ async def get_external_rate_live(start_dt: datetime.datetime,
 
     currency_to_rows = defaultdict(list)
     end_dt = end_dt or datetime.datetime(2100, 1, 1)
+    start_dt = start_dt.timestamp()
+    end_dt = end_dt.timestamp()
 
 
     async with connection() as cur:
@@ -327,6 +323,7 @@ def _external_rate_data_into_pairs(rates: Sequence[dict]):
 
 async def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.datetime) -> Dict[str, dict]:
     currency_to_data = {}
+    end_dt = end_dt.timestamp()
 
     async with connection() as cur:
         for currency in currencies:
@@ -355,7 +352,6 @@ async def get_latest_external_rates(
     currencies = 'EUR', 'RUB', 'UAH', 'DXY'
     currency_to_rows = defaultdict(list)
 
-
     if at_least_one:
         last_data = await get_the_last_external_rates(currencies, end_dt=start_dt)
         for currency, row in last_data.items():
@@ -363,7 +359,7 @@ async def get_latest_external_rates(
 
     async with connection() as cur:
         async for row in cur.execute(
-            external_rate.select(external_rate.c.timestamp >= start_dt)
+            external_rate.select(external_rate.c.timestamp >= start_dt.timestamp())
                 .order_by(external_rate.c.timestamp)
         ):
             currency_to_rows[row.currency].apend(_parse_external_rate_row(row))
