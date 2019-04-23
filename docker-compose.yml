@@ -18,6 +18,7 @@ services:
     image: "dzmitry/byn-app"
     volumes:
       - ./byn/:/byn/:ro
+      - ./mount/dump/:/tmp/dump:rw
     environment:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
@@ -79,3 +80,4 @@ services:
 
     volumes:
       - ./mount/postgres:/var/lib/postgresql/data
+      - ./mount/dump:/tmp/dump

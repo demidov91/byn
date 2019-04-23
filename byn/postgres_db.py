@@ -31,15 +31,15 @@ external_rate = sa.Table('external_rate', metadata,
                sa.Column('close', sa.DECIMAL),
                sa.Column('low', sa.DECIMAL),
                sa.Column('high', sa.DECIMAL),
-               sa.Column('value', sa.SMALLINT),
+               sa.Column('volume', sa.SMALLINT),
                )
 
 external_rate_live = sa.Table('external_rate_live', metadata,
                sa.Column('currency', sa.String(3), primary_key=True),
                sa.Column('timestamp', sa.Integer, primary_key=True),
-               sa.Column('value', sa.SMALLINT, primary_key=True),
+               sa.Column('volume', sa.SMALLINT, primary_key=True),
                sa.Column('timestamp_received', sa.INTEGER),
-               sa.Column('rates', sa.DECIMAL),
+               sa.Column('rate', sa.DECIMAL),
                )
 
 
@@ -62,7 +62,7 @@ nbrb = sa.Table('nbrb', metadata,
                )
 
 prediction = sa.Table('prediction', metadata,
-               sa.Column('timestamp', sa.Integer, primary_key=True),
+               sa.Column('timestamp', sa.BIGINT, primary_key=True),
                sa.Column('external_rates', sa.JSON),
                sa.Column('bcse_full', sa.JSON),
                sa.Column('bcse_trusted_global', sa.JSON),
@@ -93,6 +93,9 @@ DB_DATA = {
     'host': os.environ["POSTGRES_HOST"],
     'port': os.environ["POSTGRES_PORT"],
 }
+
+# Very debug mode...
+print(DB_DATA)
 
 
 async def init_pool():
@@ -372,12 +375,15 @@ async def get_latest_external_rates(
 
 async def get_accumulated_error(date: datetime.date) -> Optional[Decimal]:
     async with connection() as cur:
-        return await anext(cur.execute(
-            trade_date.select([trade_date.c.accumulated_error])
+        row = await anext(cur.execute(
+            sa.select([trade_date.c.accumulated_error])
+            .select_from(trade_date)
             .where((trade_date.c.accumulated_error != None) & (trade_date.c.date <= date))
             .order_by(sa.desc(trade_date.c.date))
             .limit(1)
         ), None)
+
+        return row and row.accumulated_error
 
 
 async def get_last_predicted_trade_date():
