@@ -29,8 +29,9 @@ logger = logging.getLogger(__name__)
 @always_on_coroutine
 async def run():
     redis = await create_redis()
-
     bcse_converter = BcseConverter()
+
+    await wait_for_data_threads()
 
     while True:
         today = datetime.date.today()
@@ -42,8 +43,6 @@ async def run():
         todays_bcse_config = TodaysRatesConfigurer(predictor=predictor, bcse_converter=bcse_converter)
 
         logger.debug('Predictor is created.')
-
-        await wait_for_data_threads()
 
         if predictor.meta.last_date < today:
             start_dt = datetime.datetime.fromordinal(today.toordinal())

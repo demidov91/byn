@@ -177,10 +177,7 @@ async def get_last_external_currency_datetime(currency: str) -> datetime.datetim
                     .limit(1)
             ), None)
 
-    if row is None:
-        return datetime.datetime.fromtimestamp(0)
-
-    return row.timestamp
+    return datetime.datetime.fromtimestamp(row.timestamp if row is not None else 0)
 
 
 async def get_last_rolling_average_date() -> Optional[datetime.date]:
@@ -202,7 +199,7 @@ async def get_rolling_average_lte(date: datetime.date) -> Tuple:
 async def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind) -> Tuple:
     async with connection() as cur:
         return await atuple(cur.execute(
-            nbrb.select((nbrb.c.date > date) & (nbrb.c.kind == kind)).order_by(nbrb.c.date)
+            nbrb.select((nbrb.c.date > date) & (nbrb.c.kind == kind.value)).order_by(nbrb.c.date)
         ))
 
 
@@ -398,13 +395,16 @@ async def get_last_predicted_trade_date():
 ############## INSERT ############
 
 async def insert_nbrb(data: Iterable[dict], *, kind: NbrbKind):
-    data = [{x.lower: item[x] for x in item} for item in data]
+    data = [{x.lower(): item[x] for x in item} for item in data]
+
+    if not data:
+        return
 
     async with connection() as cur:
-        await cur.execute(nbrb.insert(), [{
-            kind: kind.value,
+        await cur.execute(nbrb.insert().values([{
+            'kind': kind.value,
             **item
-        } for item in data])
+        } for item in data]))
 
 
 async def insert_trade_dates(trade_dates: Collection[str]):
@@ -416,18 +416,31 @@ async def insert_trade_dates(trade_dates: Collection[str]):
 
 async def insert_trade_dates_prediction_data(data: Collection[dict]):
     async with connection() as cur:
-        await cur.execute(
-            psql_insert(trade_date, data).on_conflict_do_update(index_elements=['date'])
-        )
+        for item in data:
+            await cur.execute(
+                psql_insert(trade_date, data).on_conflict_do_update(
+                    index_elements=['date'],
+                    set_={
+                        'predicted': item['predicted'],
+                        'prediction_error': item['prediction_error'],
+                        'accumulated_error': item['accumulated_error'],
+                    }
+                )
+            )
 
 
 async def insert_dxy_12MSK(data: Iterable[Tuple[str ,str]]):
+    values = [{
+        'date': x[0],
+        'dxy': x[1],
+        'kind': NbrbKind.GLOBAL.value,
+    } for x in data]
+
+    if not values:
+        return
+
     async with connection() as cur:
-        await cur.execute(nbrb.insert(), [{
-            'date': x[0],
-            'dxy': x[1],
-            'kind': NbrbKind.GLOBAL.value,
-        } for x in data])
+        await cur.execute(nbrb.insert().values(values))
 
 
 async def insert_external_rates(
@@ -443,44 +456,54 @@ async def insert_external_rates(
             ]
         ]
 ):
+    values = [{
+        'currency': currency,
+        'timestamp': x[0],
+        'open': x[1],
+        'close': x[2],
+        'low': x[3],
+        'high': x[4],
+        'volume': x[5],
+    } for x in data]
+
+    if not values:
+        return
+
     async with connection() as cur:
         await cur.execute(
-            external_rate.insert(),
-            [{
-                'currency': currency,
-                'timestamp': x[0],
-                'open': x[1],
-                'close': x[2],
-                'low': x[3],
-                'high': x[4],
-                'volume': x[5],
-            } for x in data]
+            psql_insert(external_rate, values).on_conflict_do_nothing()
         )
 
 
 async def insert_external_rate_live(row: ExternalRateData):
     async with connection() as cur:
         await cur.execute(
-            external_rate_live.insert().values(
+            psql_insert(external_rate_live, dict(
                 currency=row.currency,
                 timestamp=row.timestamp_open,
                 volume=row.volume,
                 timestamp_received=row.timestamp_received,
                 rate=row.close,
-            )
+            )).on_conflict_do_update(index_elements=['currency', 'timestamp', 'volume'], set_={
+                'timestamp_received': row.timestamp_received,
+                'rate': row.close,
+            })
         )
 
 
 async def insert_bcse(data: Iterable[BcseData], **kwargs):
+    values = [{
+        'currency': x.currency,
+        'timestamp': x.timestamp_operation,
+        'timestamp_received': x.timestamp_received,
+        'rate': x.rate,
+    } for x in data]
+
+    if not values:
+        return
+
     async with connection() as cur:
-        await cur.execute(bcse.insert(), [
-            {
-                'currency': x.currency,
-                'timestamp': x.timestamp_operation,
-                'timestamp_received': x.timestamp_received,
-                'rate': x.rate,
-            } for x in data
-        ])
+        await cur.execute(bcse.insert().values(values))
 
 
 def _ndarray_to_tuple_of_tuples(numpy_array):

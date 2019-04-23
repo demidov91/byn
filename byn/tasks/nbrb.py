@@ -143,37 +143,38 @@ def extract_nbrb(last_trade_dates: Sequence[str], need_last_date=False) -> Itera
     retry_backoff=True,
 )
 def load_dxy_12MSK() -> Tuple[Iterable]:
-    record = asyncio.run(get_last_nbrb_record(NbrbKind.GLOBAL))
-    date = record and record.date
-    dates = [x.date for x in asyncio.run(
-        atuple(get_nbrb_gt(date, kind=NbrbKind.OFFICIAL))
-    )]
+    async def _implementation():
+        record = await get_last_nbrb_record(NbrbKind.GLOBAL)
+        date = record and record.date
+        dates = [x.date for x in await get_nbrb_gt(date, kind=NbrbKind.OFFICIAL)]
 
-    if len(dates) == 0:
-        return ()
+        if len(dates) == 0:
+            return ()
 
-    start_date = dates[0]
-    end_date = dates[-1] + datetime.timedelta(days=1)
+        start_date = dates[0]
+        end_date = dates[-1] + datetime.timedelta(days=1)
 
-    raw_data = forexpf.get_data(
-        currency='DXY',
-        resolution=60*4,
-        start_dt=datetime.datetime.fromordinal(start_date.toordinal()),
-        end_dt=datetime.datetime.fromordinal(end_date.toordinal())
-    )
+        raw_data = forexpf.get_data(
+            currency='DXY',
+            resolution=60*4,
+            start_dt=datetime.datetime.fromordinal(start_date.toordinal()),
+            end_dt=datetime.datetime.fromordinal(end_date.toordinal())
+        )
 
-    dxy_regressor = KNeighborsRegressor(n_neighbors=2).fit(
-        [[x] for x in raw_data['t']],
-        raw_data['o'],
-    )
+        dxy_regressor = KNeighborsRegressor(n_neighbors=2).fit(
+            [[x] for x in raw_data['t']],
+            raw_data['o'],
+        )
 
-    timestamps = [[datetime.datetime(x.year, x.month, x.day, 12).timestamp()] for x in dates]
-    dates = [x.isoformat() for x in dates]
-    rate_pairs = tuple(zip(dates, [str(x) for x in dxy_regressor.predict(timestamps)]))
+        timestamps = [[datetime.datetime(x.year, x.month, x.day, 12).timestamp()] for x in dates]
+        dates = [x.isoformat() for x in dates]
+        rate_pairs = tuple(zip(dates, [str(x) for x in dxy_regressor.predict(timestamps)]))
 
-    asyncio.run(insert_dxy_12MSK(rate_pairs))
+        await insert_dxy_12MSK(rate_pairs)
 
-    return rate_pairs
+        return rate_pairs
+
+    return asyncio.run(_implementation())
 
 
 @app.task
@@ -190,7 +191,7 @@ def load_nbrb_local() -> Tuple[dict]:
             'EUR': x.usd / x.eur,
             'RUB': x.usd / x.rub * 100,
             'UAH': x.usd / x.uah * 100,
-        } async for x in clean_data)
+        } for x in clean_data)
 
         await insert_nbrb(data, kind=NbrbKind.LOCAL)
         return data
@@ -207,7 +208,7 @@ def load_nbrb_global():
         nbrb_local = await get_nbrb_gt(date, kind=NbrbKind.LOCAL)
         dxy = {
             x.date: x.dxy
-            async for x in get_nbrb_gt(date, kind=NbrbKind.GLOBAL)
+            for x in await get_nbrb_gt(date, kind=NbrbKind.GLOBAL)
         }
 
         data = tuple({
@@ -216,7 +217,7 @@ def load_nbrb_global():
             'EUR': x.eur / dxy[x.date],
             'RUB': x.rub / dxy[x.date],
             'UAH': x.uah / dxy[x.date],
-        } async for x in nbrb_local)
+        } for x in nbrb_local)
 
         await insert_nbrb(data, kind=NbrbKind.GLOBAL)
         return data
@@ -234,7 +235,7 @@ def load_nbrb(rates):
     for date, rates in db_rates.items():
         rates['date'] = date
 
-    data = db_rates.values()
+    data = tuple(db_rates.values())
     asyncio.run(insert_nbrb(data, kind=NbrbKind.OFFICIAL))
     return data
 
