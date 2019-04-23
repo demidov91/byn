@@ -92,17 +92,17 @@ async def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[
     return x, y, [x.date for x in rows]
 
 
-def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
+async def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
     if use_rolling:
-        x, y, dates = asyncio.run(_get_full_X_Y(date))
+        x, y, dates = await _get_full_X_Y(date)
     else:
-        x, y, dates = asyncio.run(_get_X_Y_with_empty_rolling(date))
+        x, y, dates = await _get_X_Y_with_empty_rolling(date)
 
     pre_processor = GlobalToNormlizedDataProcessor()
     pre_processor.fit(x, y)
     x = pre_processor.transform_global_vectorized(x)
 
-    accumulated_error = asyncio.run(get_accumulated_error(date))
+    accumulated_error = await get_accumulated_error(date)
     if accumulated_error is None:
         logger.warning('Got no accumulated error for %s', date)
         accumulated_error = 0
@@ -129,12 +129,12 @@ def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
     return predictor
 
 
-def build_and_predict_linear(date: datetime.date) -> float:
-    predictor = build_predictor(
+async def build_and_predict_linear(date: datetime.date) -> float:
+    predictor = await build_predictor(
         date - datetime.timedelta(days=1),
         use_rolling=False
     )
-    rates = asyncio.run(get_nbrb_rate(date, NbrbKind.GLOBAL))
+    rates = await get_nbrb_rate(date, NbrbKind.GLOBAL)
     if not rates:
         raise ValueError(f"No rates for {date}")
 

@@ -12,7 +12,6 @@ from decimal import Decimal
 from typing import Dict, Tuple, Iterable, Sequence
 
 import numpy as np
-import requests
 import celery
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -40,7 +39,12 @@ from byn.realtime.synchronization import (
 )
 
 
-client = requests.Session()
+try:
+    import requests
+    client = requests.Session()
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 

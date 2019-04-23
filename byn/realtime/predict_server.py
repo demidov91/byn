@@ -37,7 +37,7 @@ async def run():
 
         logger.debug('Creating predictor...')
 
-        predictor = build_predictor(today, use_rolling=True)
+        predictor = await build_predictor(today, use_rolling=True)
         rolling_average = predictor.meta.last_rolling_average
         todays_bcse_config = TodaysRatesConfigurer(predictor=predictor, bcse_converter=bcse_converter)
 
@@ -52,7 +52,7 @@ async def run():
                 dtype=np.dtype(object)
             )
 
-            todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
+            await todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
 
         logger.debug('Predictor is configured.')
 
@@ -68,7 +68,7 @@ async def run():
                     (ts, rate) for ts, rate in message['data']['rates']
                 ], dtype=np.dtype(object))
 
-                todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
+                await todays_bcse_config.configure(bcse_pairs=bcse_data, rolling_average=rolling_average)
 
             elif command == PredictCommand.PREDICT:
                 message_guid = message['data'].pop('message_guid')
@@ -114,7 +114,7 @@ class TodaysRatesConfigurer:
         self.bcse_converter = bcse_converter
 
 
-    def configure(self, *, bcse_pairs: np.ndarray, rolling_average: np.ndarray):
+    async def configure(self, *, bcse_pairs: np.ndarray, rolling_average: np.ndarray):
         self.bcse_full = np.array([])
         self.bcse_trusted = np.array([])
         self.bcse_trusted_global = np.array([])
@@ -124,7 +124,7 @@ class TodaysRatesConfigurer:
             return
 
         logger.debug('Bcse data to set: %s', bcse_pairs)
-        self.bcse_converter.update(bcse_pairs)
+        await self.bcse_converter.update(bcse_pairs)
 
         open_timestamp = bcse_pairs[0][0]
         fake_rate = self.bcse_converter.get_fake_rate(open_timestamp)

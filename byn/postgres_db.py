@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Collection, Dict, Iterable, Iterator, Optional, Sequence, Tuple
 
 import aiopg
+import aiopg.sa
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as psql_insert
 
@@ -103,15 +104,29 @@ async def init_pool():
         return None
 
     try:
-        return await aiopg.create_pool(
-            'dbname={database} user={user} password={password} host={host} port={port}'.format(**DB_DATA)
-        )
+        return await aiopg.sa.create_engine(**DB_DATA)
     except:
         logger.exception("Can't initialize pool.")
         return None
 
 
-pool = asyncio.run(init_pool())
+
+import contextvars
+local_engine = contextvars.ContextVar('local_engine')
+
+async def get_engine():
+    engine = local_engine.get(None)
+    if engine is None:
+        engine = await init_pool()
+        local_engine.set(engine)
+    return engine
+
+
+@asynccontextmanager
+async def connection():
+    async with (await get_engine()).acquire() as connection:
+        yield connection
+
 
 
 class NbrbKind(Enum):
@@ -132,16 +147,10 @@ async def anext(async_iter, default=_not_set):
         return default
 
 
-@asynccontextmanager
-async def pool_cursor():
-    with (await pool.cursor()) as cursor:
-        yield cursor
-
-
 
 ############# SELECT ############
 async def get_last_nbrb_record(kind: NbrbKind):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await anext(
             cur.execute(
                 nbrb.select(nbrb.c.kind==kind.value)
@@ -151,7 +160,7 @@ async def get_last_nbrb_record(kind: NbrbKind):
         )
 
 async def get_last_nbrb_global_with_rates():
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await anext(cur.execute(
             nbrb.select(nbrb.c.kind == NbrbKind.GLOBAL.value and nbrb.c.rate != None)
             .order_by(sa.desc(nbrb.c.date)
@@ -160,14 +169,14 @@ async def get_last_nbrb_global_with_rates():
 
 
 async def get_nbrb_rate(date: datetime.date, kind: NbrbKind):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await anext(cur.execute(
             nbrb.select((nbrb.c.date == date) & (nbrb.c.kind == kind.value))
         ), None)
 
 
 async def get_last_external_currency_datetime(currency: str) -> datetime.datetime:
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         row = await anext(
             cur.execute(
                 external_rate.select(external_rate.c.currency==currency)
@@ -182,7 +191,7 @@ async def get_last_external_currency_datetime(currency: str) -> datetime.datetim
 
 
 async def get_last_rolling_average_date() -> Optional[datetime.date]:
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         row = await anext(cur.execute(
             rolling_average.select().order_by(sa.desc(rolling_average.c.date)).limit(1)
         ))
@@ -190,7 +199,7 @@ async def get_last_rolling_average_date() -> Optional[datetime.date]:
     return row and row.date
 
 async def get_rolling_average_lte(date: datetime.date):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await cur.execute(
             rolling_average.select(rolling_average.c.date <= date)
             .order_by(rolling_average.c.date)
@@ -198,14 +207,14 @@ async def get_rolling_average_lte(date: datetime.date):
 
 
 async def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await cur.execute(
             nbrb.select((nbrb.c.date > date) & (nbrb.c.kind == kind)).order_by(nbrb.c.date)
         )
 
 
 async def get_nbrb_lte(date: datetime.date, kind: NbrbKind):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await cur.execute(
             nbrb.select(
                 (nbrb.c.date <= date) &
@@ -215,7 +224,7 @@ async def get_nbrb_lte(date: datetime.date, kind: NbrbKind):
 
 
 async def get_valid_nbrb_gt(date: datetime.date, kind: NbrbKind):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await cur.execute(
             nbrb.select(
                 (nbrb.c.date > date) &
@@ -235,7 +244,7 @@ async def get_bcse_in(
 ) -> Iterable[Tuple[int, Decimal]]:
     end_dt = end_dt or datetime.datetime(2035, 1, 1)
 
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await cur.execute(
             bcse.select([bcse.c.timestamp, bcse.c.rate])
             .where(
@@ -253,7 +262,7 @@ async def get_external_rate_live(start_dt: datetime.datetime,
     end_dt = end_dt or datetime.datetime(2100, 1, 1)
 
 
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         async for row in cur.execute(external_rate_live.select(
                 (external_rate_live.c.timestamp >= start_dt) &
                 (external_rate_live.c.timestamp < end_dt)
@@ -319,7 +328,7 @@ def _external_rate_data_into_pairs(rates: Sequence[dict]):
 async def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetime.datetime) -> Dict[str, dict]:
     currency_to_data = {}
 
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         for currency in currencies:
             row = await anext(cur.execute(
                 external_rate.select(
@@ -352,7 +361,7 @@ async def get_latest_external_rates(
         for currency, row in last_data.items():
             currency_to_rows[currency].append(row)
 
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         async for row in cur.execute(
             external_rate.select(external_rate.c.timestamp >= start_dt)
                 .order_by(external_rate.c.timestamp)
@@ -366,7 +375,7 @@ async def get_latest_external_rates(
 
 
 async def get_accumulated_error(date: datetime.date) -> Optional[Decimal]:
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await anext(cur.execute(
             trade_date.select([trade_date.c.accumulated_error])
             .where((trade_date.c.accumulated_error != None) & (trade_date.c.date <= date))
@@ -376,7 +385,7 @@ async def get_accumulated_error(date: datetime.date) -> Optional[Decimal]:
 
 
 async def get_last_predicted_trade_date():
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         return await anext(cur.execute(
             trade_date.select(trade_date.c.predicted != None)
             .order_by(sa.desc(trade_date.c.date))
@@ -389,7 +398,7 @@ async def get_last_predicted_trade_date():
 async def insert_nbrb(data: Iterable[dict], *, kind: NbrbKind):
     data = [{x.lower: item[x] for x in item} for item in data]
 
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(nbrb.insert(), [{
             kind: kind.value,
             **item
@@ -397,19 +406,21 @@ async def insert_nbrb(data: Iterable[dict], *, kind: NbrbKind):
 
 
 async def insert_trade_dates(trade_dates: Collection[str]):
-    async with pool_cursor() as cur:
-        await cur.execute(trade_date.insert(), [{'date': x} for x in trade_dates])
+    async with connection() as cur:
+        await cur.execute(psql_insert(
+            trade_date, [{'date': x} for x in trade_dates]
+        ).on_conflict_do_nothing())
 
 
 async def insert_trade_dates_prediction_data(data: Collection[dict]):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(
             psql_insert(trade_date, data).on_conflict_do_update(index_elements=['date'])
         )
 
 
 async def insert_dxy_12MSK(data: Iterable[Tuple[str ,str]]):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(nbrb.insert(), [{
             'date': x[0],
             'dxy': x[1],
@@ -430,7 +441,7 @@ async def insert_external_rates(
             ]
         ]
 ):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(
             external_rate.insert(),
             [{
@@ -446,7 +457,7 @@ async def insert_external_rates(
 
 
 async def insert_external_rate_live(row: ExternalRateData):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(
             external_rate_live.insert().values(
                 currency=row.currency,
@@ -459,7 +470,7 @@ async def insert_external_rate_live(row: ExternalRateData):
 
 
 async def insert_bcse(data: Iterable[BcseData], **kwargs):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(bcse.insert(), [
             {
                 'currency': x.currency,
@@ -488,7 +499,7 @@ async def insert_prediction(
     if bcse_trusted_global is not None:
         bcse_trusted_global = _ndarray_to_tuple_of_tuples(bcse_trusted_global)
 
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(prediction.insert().values(
             timestamp=timestamp,
             external_rates=external_rates,
@@ -499,7 +510,7 @@ async def insert_prediction(
 
 
 async def insert_rolling_average(date: datetime.date, duration: int, data: Sequence[Decimal]):
-    async with pool_cursor() as cur:
+    async with connection() as cur:
         await cur.execute(rolling_average.insert().values(
             date=date,
             duration=duration,

@@ -22,10 +22,16 @@ services:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
       - REDIS_URL=redis://redis
-      - HBASE_HOST=${HBASE_HOST:-hbase-master}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - BACKUP_BUCKET=${BACKUP_BUCKET:-byn-dzmitry-by-backup}
       - SENTRY_DSN=${SENTRY_DSN}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
+    depends_on:
+      - postgres
+      - redis
 
   celery:
     build:
@@ -40,7 +46,10 @@ services:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis
       - REDIS_URL=redis://redis
-      - HBASE_HOST=${HBASE_HOST:-hbase-master}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - C_FORCE_ROOT=true
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -61,6 +70,12 @@ services:
     image: "postgres:11-alpine"
     ports:
       - "${HOST_POSTGRES_PORT:-6432}:5432"
+
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
     volumes:
       - ./mount/postgres:/var/lib/postgresql/data

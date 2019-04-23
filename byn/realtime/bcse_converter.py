@@ -21,7 +21,7 @@ class BcseConverter:
         self.fake_rates = {}
 
 
-    def update(self, bcse_pairs):
+    async def update(self, bcse_pairs):
         new_bcse = [x for x in bcse_pairs if x[0] not in self.resolved_bcse_rates]
 
         if not new_bcse:
@@ -29,7 +29,7 @@ class BcseConverter:
             return
 
         start_dt = datetime.datetime.fromtimestamp(new_bcse[0][0])
-        external_rates_extractor = asyncio.run(build_rates_extractor(start_dt))
+        external_rates_extractor = await build_rates_extractor(start_dt)
 
         for point in new_bcse:
             self.resolved_bcse_rates[point[0]] = external_rates_extractor.get_by_timestamp(point[0])
@@ -42,10 +42,6 @@ class BcseConverter:
 
     def set_fake_rate(self, timestamp: int, rate: float):
         self.fake_rates[timestamp] = rate
-
-    def convert(self, bcse_pairs):
-        self.update(bcse_pairs)
-        return [self.resolved_bcse_rates[x] for x in bcse_pairs]
 
 
 async def build_rates_extractor(start_dt: datetime.datetime):

@@ -31,7 +31,7 @@ def daily_predict():
         new_data = []
 
         async for nbrb_row in nbrb_data:
-            predicted = Decimal(build_and_predict_linear(nbrb_row.date))
+            predicted = Decimal(await build_and_predict_linear(nbrb_row.date))
             prediction_error = predicted / nbrb_row.byn - 1
             accumulated_error += prediction_error
 

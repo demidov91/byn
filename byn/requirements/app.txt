@@ -6,6 +6,7 @@
 #
 -e git+https://github.com/celery/celery@cd6c7444cadbdaaccca14a986e7e1b3330c33024#egg=celery
 aiohttp==3.5.4
+aiopg==0.16.0
 aioredis==1.2.0
 amqp==2.4.1               # via kombu
 async-timeout==3.0.1      # via aiohttp, aioredis
@@ -13,21 +14,18 @@ attrs==18.2.0             # via aiohttp
 billiard==3.5.0.5
 certifi==2018.11.29       # via sentry-sdk
 chardet==3.0.4            # via aiohttp
-cython==0.29.6
-happybase==1.1.0
 hiredis==0.3.1            # via aioredis
 idna==2.8                 # via yarl
 kombu==4.3.0
 multidict==4.5.2          # via aiohttp, yarl
 numpy==1.16.1             # via scikit-learn, scipy
-ply==3.11                 # via thriftpy
+psycopg2-binary==2.8.2    # via aiopg
 pytz==2018.9
 redis==3.1.0
 scikit-learn==0.20.2
 scipy==1.2.1              # via scikit-learn
 sentry-sdk==0.7.6
-six==1.12.0               # via happybase
-thriftpy==0.3.9           # via happybase
+sqlalchemy==1.3.3
 urllib3==1.24.1           # via sentry-sdk
 vine==1.2.0               # via amqp
 yarl==1.3.0               # via aiohttp
