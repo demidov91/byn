@@ -9,7 +9,7 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
-from typing import Dict, Tuple, Iterable, Sequence
+from typing import Dict, List, Tuple, Iterable, Sequence, Coroutine
 
 import numpy as np
 import celery
@@ -242,10 +242,8 @@ def load_nbrb(rates):
 
 @app.task
 def load_rolling_average():
-
-
     last_rolling_average_date = asyncio.run(get_last_rolling_average_date())
-    nbrb_rows = asyncio.run(atuple(get_nbrb_gt(None, kind=NbrbKind.GLOBAL)))
+    nbrb_rows = asyncio.run(get_nbrb_gt(None, kind=NbrbKind.GLOBAL))
 
     dates = [x.date for x in nbrb_rows]
     rates = np.array([(
@@ -285,7 +283,12 @@ def load_rolling_average():
                     )
                 )
 
-    asyncio.run(asyncio.gather(*mass_insert))
+    async def _run_mass_insert(chunk: List[Coroutine]):
+        await asyncio.gather(*chunk)
+
+    for i in range(len(mass_insert), 10):
+        asyncio.run(_run_mass_insert(mass_insert[i:i+10]))
+
 
 
 @app.task

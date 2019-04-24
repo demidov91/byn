@@ -155,16 +155,22 @@ async def get_last_nbrb_record(kind: NbrbKind):
 async def get_last_nbrb_global_with_rates():
     async with connection() as cur:
         return await anext(cur.execute(
-            nbrb.select(nbrb.c.kind == NbrbKind.GLOBAL.value and nbrb.c.rate != None)
-            .order_by(sa.desc(nbrb.c.date)
+            nbrb.select(
+                (nbrb.c.kind == NbrbKind.GLOBAL.value) &
+                (nbrb.c.byn != None)
+            )
+            .order_by(sa.desc(nbrb.c.date))
             .limit(1)
-        )), None)
+        ), None)
 
 
 async def get_nbrb_rate(date: datetime.date, kind: NbrbKind):
     async with connection() as cur:
-        await anext(cur.execute(
-            nbrb.select((nbrb.c.date == date) & (nbrb.c.kind == kind.value))
+        return await anext(cur.execute(
+            nbrb.select(
+                (nbrb.c.date == date) &
+                (nbrb.c.kind == kind.value)
+            )
         ), None)
 
 
@@ -184,7 +190,7 @@ async def get_last_rolling_average_date() -> Optional[datetime.date]:
     async with connection() as cur:
         row = await anext(cur.execute(
             rolling_average.select().order_by(sa.desc(rolling_average.c.date)).limit(1)
-        ))
+        ), None)
 
     return row and row.date
 
@@ -197,10 +203,12 @@ async def get_rolling_average_lte(date: datetime.date) -> Tuple:
 
 
 async def get_nbrb_gt(date: Optional[datetime.date], kind: NbrbKind) -> Tuple:
+    query = nbrb.c.kind == kind.value
+    if date is not None:
+        query &= (nbrb.c.date > date)
+
     async with connection() as cur:
-        return await atuple(cur.execute(
-            nbrb.select((nbrb.c.date > date) & (nbrb.c.kind == kind.value)).order_by(nbrb.c.date)
-        ))
+        return await atuple(cur.execute(nbrb.select(query).order_by(nbrb.c.date)))
 
 
 async def get_nbrb_lte(date: datetime.date, kind: NbrbKind) -> Tuple:
@@ -400,11 +408,17 @@ async def insert_nbrb(data: Iterable[dict], *, kind: NbrbKind):
     if not data:
         return
 
-    async with connection() as cur:
-        await cur.execute(nbrb.insert().values([{
-            'kind': kind.value,
-            **item
-        } for item in data]))
+    async with connection() as conn:
+        for item in data:
+            date = item.pop('date')
+            await conn.execute(psql_insert(nbrb, {
+                'kind': kind.value,
+                'date': date,
+                **item
+            }).on_conflict_do_update(
+                index_elements=['kind', 'date'],
+                set_=item
+            ))
 
 
 async def insert_trade_dates(trade_dates: Collection[str]):
@@ -418,7 +432,7 @@ async def insert_trade_dates_prediction_data(data: Collection[dict]):
     async with connection() as cur:
         for item in data:
             await cur.execute(
-                psql_insert(trade_date, data).on_conflict_do_update(
+                psql_insert(trade_date, item).on_conflict_do_update(
                     index_elements=['date'],
                     set_={
                         'predicted': item['predicted'],
