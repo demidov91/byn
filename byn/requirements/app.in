@@ -6,8 +6,8 @@ redis
 scikit-learn
 
 # Communicate with db-s
-cython
-happybase
+aiopg
+sqlalchemy
 aioredis
 
 # Communicate with api-s

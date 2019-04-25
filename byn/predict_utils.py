@@ -1,7 +1,7 @@
 import datetime
 import logging
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, List
 from itertools import chain
 
 import numpy as np
@@ -10,15 +10,14 @@ import byn.constants as const
 from byn.predict.predictor import Predictor, RidgeWeight
 from byn.predict.processor import GlobalToNormlizedDataProcessor
 from byn.datatypes import LocalRates
-from byn.hbase_db import (
-    db,
-    bytes_to_date,
-    date_to_next_bytes,
-    table,
-    key_part,
-    get_decimal,
-    get_accumulated_error,
+
+from byn.postgres_db import (
     NbrbKind,
+    get_accumulated_error,
+    get_nbrb_lte,
+    get_rolling_average_lte,
+    get_nbrb_rate,
+    get_magic_rolling_average,
 )
 
 
@@ -29,38 +28,25 @@ logger = logging.getLogger(__name__)
 _number_of_rates = 3
 ROLLING_AVERAGE_LENGTH = len(const.ROLLING_AVERAGE_DURATIONS) * _number_of_rates
 X_LENGTH = _number_of_rates + len(const.ROLLING_AVERAGE_DURATIONS) * _number_of_rates
-EXTERNAL_RATES_COLUMNS = b'rate:eur', b'rate:rub', b'rate:uah'
+EXTERNAL_RATES_COLUMNS = 'eur', 'rub', 'uah'
 
 
 
-def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
+async def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
     x = []
     y = []
-
-    with db.connection() as connection:
-        nbrb_table = connection.table('nbrb')
-        rates = nbrb_table.scan(
-            row_start=b'global|',
-            row_stop=b'global|' + date_to_next_bytes(date)
-        )
-
-        rolling_average_table = connection.table('rolling_average')
-        rolling_averages = rolling_average_table.scan(row_stop=date_to_next_bytes(date))
-
     rates_as_dict = {}
     byn_rates = {}
 
-    for key, data in rates:
-        _, date = key.split(b'|')
-        rates_as_dict[date] = [data[x] for x in EXTERNAL_RATES_COLUMNS]
-        byn_rates[date] = data[b'rate:byn']
+    for row in await get_nbrb_lte(date, NbrbKind.GLOBAL):
+        rates_as_dict[row.date] = [row[x] for x in EXTERNAL_RATES_COLUMNS]
+        byn_rates[row.date] = row.byn
 
 
     rolling_averages_as_dict = defaultdict(dict)
 
-    for key, data in rolling_averages:
-        date, duration = key.split(b'|')
-        rolling_averages_as_dict[date][duration] = [data[column] for column in EXTERNAL_RATES_COLUMNS]
+    for row in await get_rolling_average_lte(date):
+        rolling_averages_as_dict[row.date][row.duration] = _rolling_row_to_X_part(row)
 
     for today in rates_as_dict:
         todays_X = np.full(X_LENGTH, None)
@@ -74,40 +60,37 @@ def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[da
     return (
         np.array(x, dtype='float64'),
         np.array(y, dtype='float64'),
-        tuple(bytes_to_date(x) for x in rates_as_dict.keys())
+        tuple(rates_as_dict.keys())
     )
 
 
-def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
-    with table('nbrb') as nbrb_table:
-        keys, rates = zip(
-            *nbrb_table.scan(
-                row_start=NbrbKind.GLOBAL.as_prefix,
-                row_stop=NbrbKind.GLOBAL.as_prefix + date_to_next_bytes(date)
-            )
-        )
+async def _get_X_Y_with_empty_rolling(date: datetime.date) -> Tuple[
+    np.ndarray,
+    np.ndarray,
+    List[datetime.date]
+]:
+    rows = await get_nbrb_lte(date, NbrbKind.GLOBAL)
+
+    x = np.full((len(rows), X_LENGTH), None, dtype='float64')
+    for x_row, rate_row in zip(x, rows):
+        x_row[:3] = [getattr(rate_row, col) for col in EXTERNAL_RATES_COLUMNS]
+
+    y = np.array([x.byn for x in rows], dtype='float64')
+
+    return x, y, [x.date for x in rows]
 
 
-    x = np.full((len(rates), X_LENGTH), None, dtype='float64')
-    for x_row, rate_row in zip(x, rates):
-        x_row[:3] = [rate_row[col] for col in EXTERNAL_RATES_COLUMNS]
-
-    y = np.array([x[b'rate:byn'] for x in rates], dtype='float64')
-
-    return x, y, tuple(bytes_to_date(key_part(x, 1)) for x in keys)
-
-
-def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
+async def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
     if use_rolling:
-        x, y, dates = _get_full_X_Y(date)
+        x, y, dates = await _get_full_X_Y(date)
     else:
-        x, y, dates = _get_X_Y_with_empty_rolling(date)
+        x, y, dates = await _get_X_Y_with_empty_rolling(date)
 
     pre_processor = GlobalToNormlizedDataProcessor()
     pre_processor.fit(x, y)
     x = pre_processor.transform_global_vectorized(x)
 
-    accumulated_error = get_accumulated_error(date)
+    accumulated_error = await get_accumulated_error(date)
     if accumulated_error is None:
         logger.warning('Got no accumulated error for %s', date)
         accumulated_error = 0
@@ -129,30 +112,24 @@ def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor:
         predictor._rebuild_ridge_model(cache_key=f'{_cache_prefix}_{date:%Y-%m-%d}')
 
     predictor.meta.last_date = dates[-1]
-    predictor.meta.last_rolling_average = x[-1][3:]
 
     return predictor
 
 
-def get_rates_for_date(date: datetime.date) -> dict:
-    with table('nbrb') as nbrb:
-        return nbrb.row(f'global|{date:%Y-%m-%d}'.encode())
-
-
-def build_and_predict_linear(date: datetime.date) -> float:
-    predictor = build_predictor(
+async def build_and_predict_linear(date: datetime.date) -> float:
+    predictor = await build_predictor(
         date - datetime.timedelta(days=1),
         use_rolling=False
     )
-    rates = get_rates_for_date(date)
+    rates = await get_nbrb_rate(date, NbrbKind.GLOBAL)
     if not rates:
         raise ValueError(f"No rates for {date}")
 
     rates = LocalRates(
-        eur=get_decimal(rates, b'rate:eur'),
-        rub=get_decimal(rates, b'rate:rub'),
-        uah=get_decimal(rates, b'rate:uah'),
-        dxy=get_decimal(rates, b'rate:dxy'),
+        eur=rates.eur,
+        rub=rates.rub,
+        uah=rates.uah,
+        dxy=rates.dxy,
     )
 
     x = predictor.pre_processor.transform_global(
@@ -164,3 +141,15 @@ def build_and_predict_linear(date: datetime.date) -> float:
     logger.debug('x: %s', x)
 
     return predictor._ridge_predict_with_one_model(x, weight=RidgeWeight.LINEAR)
+
+
+def _rolling_row_to_X_part(row):
+    return [row[column] for column in EXTERNAL_RATES_COLUMNS]
+
+
+async def get_magic_rolling_average_as_array(pre_processor: GlobalToNormlizedDataProcessor):
+    rolling = [0, 0, 0]
+    for row in await get_magic_rolling_average():
+        rolling.extend(_rolling_row_to_X_part(row))
+
+    return pre_processor.transform_global_vectorized([rolling])[0][3:]

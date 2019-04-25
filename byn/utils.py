@@ -119,5 +119,21 @@ class DecimalAwareEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+async def alist(coro) -> list:
+    return [x async for x in coro]
 
 
+async def atuple(coro) -> tuple:
+    return tuple(await alist(coro))
+
+
+_not_set = object()
+
+async def anext(async_iter, default=_not_set):
+    try:
+        return await (await async_iter.__aiter__()).__anext__()
+    except StopAsyncIteration as e:
+        if default is _not_set:
+            raise e
+
+        return default

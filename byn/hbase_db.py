@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import threading
+import warnings
 from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
 from dataclasses import asdict
@@ -25,6 +26,8 @@ from byn.utils import DecimalAwareEncoder, always_on_sync
 monkeypatch_happybase()
 thread_local = threading.local()
 logger = logging.getLogger(__name__)
+
+warnings.warn("hbase misbehaves. Use psql instead.")
 
 
 @always_on_sync

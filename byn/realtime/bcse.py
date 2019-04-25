@@ -13,9 +13,9 @@ from aiohttp.client import ClientSession
 from aioredis import Redis
 
 import byn.constants as const
-from byn.hbase_db import insert_bcse, get_bcse_in
+from byn.postgres_db import insert_bcse, get_bcse_in
 from byn.datatypes import BcseData, PredictCommand
-from byn.utils import always_on_coroutine, create_redis
+from byn.utils import always_on_coroutine, create_redis, atuple
 from byn.realtime.synchronization import (
     mark_as_ready,
     BCSE as BCSE_IS_READY,
@@ -88,8 +88,8 @@ def _get_open_time(current_dt: datetime.datetime) -> datetime.datetime:
     return _get_todays_bcse_start(current_dt.date())
 
 
-def _build_initial_current_records(today: datetime.date):
-    return OrderedDict(get_bcse_in(
+async def _build_initial_current_records(today: datetime.date):
+    return OrderedDict(await get_bcse_in(
         'USD',
         _get_todays_bcse_start(today),
         datetime.datetime.fromordinal((today + datetime.timedelta(days=1)).toordinal())
@@ -99,7 +99,7 @@ def _build_initial_current_records(today: datetime.date):
 @always_on_coroutine
 async def _listen_to_bcse_till(finish_datetime):
     today = datetime.date.today()
-    current_records = _build_initial_current_records(today)
+    current_records = await _build_initial_current_records(today)
     redis = await create_redis()
     await mark_as_ready(BCSE_IS_READY)
 
@@ -135,7 +135,7 @@ async def _extract_and_publish(today, current_records, redis, client):
 
     logger.debug('New bcse data: %s', new_data)
 
-    insert_bcse(new_data)
+    asyncio.create_task(insert_bcse(new_data))
 
     if len(new_data) > 0:
         asyncio.create_task(_notify_about_new_bcse(redis, data))

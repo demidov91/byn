@@ -1,19 +1,15 @@
+import asyncio
 import datetime
 import logging
 from decimal import Decimal
 
-from happybase.util import bytes_increment
-
 from byn.predict_utils import build_and_predict_linear
 from byn.tasks.launch import app
-from byn.hbase_db import (
-    bytes_to_date,
-    get_decimal,
-    date_to_next_bytes,
-    db,
-    key_part,
+from byn.postgres_db import (
     NbrbKind,
-    table,
+    get_last_predicted_trade_date,
+    get_valid_nbrb_gt,
+    insert_trade_dates_prediction_data,
 )
 
 
@@ -26,48 +22,30 @@ logger = logging.getLogger(__name__)
     retry_backoff=True,
 )
 def daily_predict():
-    with db.connection() as connection:
-        trade_date = connection.table('trade_date')
+    async def _implementation():
+        last_record = await get_last_predicted_trade_date()
+        start_date = last_record.date if last_record else start_prediction_day
+        accumulated_error = last_record.accumulated_error if last_record else 0
+        nbrb_data = await get_valid_nbrb_gt(start_date, NbrbKind.GLOBAL)
 
-        last_record = next(trade_date.scan(
-            reverse=True,
-            limit=1,
-            filter="SingleColumnValueFilter('rate', 'predicted', >, 'binary:', true, true)",
-        ), None)
+        new_data = []
 
-        start_date = bytes_to_date(last_record[0]) if last_record else start_prediction_day
-        accumulated_error = get_decimal(last_record[1], b'rate:accumulated_error') if last_record else 0
+        for nbrb_row in nbrb_data:
+            predicted = Decimal(await build_and_predict_linear(nbrb_row.date))
+            prediction_error = predicted / nbrb_row.byn - 1
+            accumulated_error += prediction_error
 
-        nbrb = connection.table('nbrb')
-        key_to_data = tuple(nbrb.scan(
-            row_start=NbrbKind.GLOBAL.as_prefix + date_to_next_bytes(start_date),
-            row_stop=bytes_increment(NbrbKind.GLOBAL.as_prefix),
-            filter="SingleColumnValueFilter('rate', 'eur', >, 'binary:', true, true) AND "
-                   "SingleColumnValueFilter('rate', 'rub', >, 'binary:', true, true) AND "
-                   "SingleColumnValueFilter('rate', 'uah', >, 'binary:', true, true)",
-        ))
+            data = {
+                'date': nbrb_row.date,
+                'predicted': predicted,
+                'prediction_error': prediction_error,
+                'accumulated_error': accumulated_error,
+            }
 
-    new_data = []
+            logger.debug(data)
+            new_data.append(data)
 
-    for key, data in key_to_data:
-        date = key_part(key, 1)
-        real_rate = get_decimal(data, b'rate:byn')
+        await insert_trade_dates_prediction_data(new_data)
 
-        predicted = Decimal(build_and_predict_linear(bytes_to_date(date)))
-        prediction_error = predicted/real_rate - 1
-        accumulated_error += prediction_error
+    asyncio.run(_implementation())
 
-        data = {
-            'date': date,
-            b'rate:predicted': str(predicted).encode(),
-            b'rate:prediction_error': str(prediction_error).encode(),
-            b'rate:accumulated_error': str(accumulated_error).encode(),
-        }
-
-        logger.debug(data)
-        new_data.append(data)
-
-    with table('trade_date') as trade_date:
-        for row in new_data:
-            key = row.pop('date')
-            trade_date.put(key, row)

@@ -9,7 +9,7 @@ from asyncio.queues import Queue
 from aiohttp.client import ClientSession, ClientTimeout
 
 from byn import constants as const
-from byn.hbase_db import insert_external_rate_live
+from byn.postgres_db import insert_external_rate_live
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
 from byn.utils import always_on_coroutine, create_redis
@@ -31,7 +31,7 @@ def mark_load_history_ready():
 async def listen_forexpf():
     current_dt = datetime.datetime.now()
 
-    (build_task_update_all_currencies() | mark_load_history_ready.si())()
+    (await build_task_update_all_currencies() | mark_load_history_ready.si())()
 
     if not _forexpf_works(current_dt):
         await mark_as_ready(EXTERNAL_LIVE)
@@ -132,7 +132,7 @@ async def _worker(queue: Queue):
         logger.debug(data)
 
         # Persist.
-        insert_external_rate_live(data)
+        asyncio.create_task(insert_external_rate_live(data))
         
         # Save in redis.
         try:

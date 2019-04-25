@@ -3,6 +3,7 @@ RUB, UAH, EUR, DXY rates from profinance.ru (former forexpf) with a minute detal
 
 Periodical: once a day.
 """
+import asyncio
 import datetime
 import json
 
@@ -10,7 +11,7 @@ from celery import group
 
 from byn import constants as const
 from byn import forexpf
-from byn.hbase_db import insert_external_rates, get_last_external_currency_datetime
+from byn.postgres_db import insert_external_rates, get_last_external_currency_datetime
 from byn.tasks.launch import app
 
 
@@ -46,21 +47,21 @@ def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
         data = json.load(f, parse_float=str)
 
-    insert_external_rates(currency, data)
+    asyncio.run(insert_external_rates(currency, data))
 
 
-def build_task_update_one_currency(currency: str):
-    start_dt = get_last_external_currency_datetime(currency)
+async def build_task_update_one_currency(currency: str):
+    start_dt = await get_last_external_currency_datetime(currency)
     return extract_one_currency.si(start_dt, currency) | load_one_currency.si(currency)
 
 
-def build_task_update_all_currencies():
-    return group([build_task_update_one_currency(x) for x in forexpf.CURRENCY_CODES.keys()])
+async def build_task_update_all_currencies():
+    return group([await build_task_update_one_currency(x) for x in forexpf.CURRENCY_CODES.keys()])
 
 
 @app.task
 def update_all_currencies_async():
-    build_task_update_all_currencies()()
+    asyncio.run(build_task_update_all_currencies())()
 
 
 def extend_dump_by_forexpf_file(currency, file_path):
