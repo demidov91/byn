@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import logging
 from collections import defaultdict
@@ -36,9 +35,6 @@ EXTERNAL_RATES_COLUMNS = 'eur', 'rub', 'uah'
 async def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tuple[datetime.date]]:
     x = []
     y = []
-
-    ##############
-
     rates_as_dict = {}
     byn_rates = {}
 
