@@ -129,7 +129,7 @@ class TodaysRatesConfigurer:
         fake_rate = self.bcse_converter.get_fake_rate(open_timestamp)
 
         if fake_rate is None:
-            self.predictor.ignore_todays_rates()
+            self.predictor.turn_off_todays_rates()
 
             fake_rate = self.predictor.predict_by_local(
                 self.bcse_converter.get_by_timestamp(open_timestamp),
@@ -145,15 +145,15 @@ class TodaysRatesConfigurer:
 
         if not trust.any():
             logger.debug("There is no bcse rates to trust. Skipping.")
-            self.predictor.ignore_todays_rates()
+            self.predictor.turn_off_todays_rates()
             return
 
         self.bcse_full = bcse_pairs
-        self.bcse_trusted = self.bcse_full[trust]
+        self.bcse_trusted = bcse_pairs[trust]
 
         X = [self.bcse_converter.get_by_timestamp(x[0]) for x in self.bcse_trusted]
         Y = np.array(self.bcse_trusted[:, 1], dtype='float64')
-        self.predictor.set_todays_local_rates(X, Y, rolling_average)
+        self.predictor.turn_on_todays_local_rates(X, Y, rolling_average)
 
         self.bcse_trusted_global = self.bcse_trusted.copy()
         self.bcse_trusted_global[:,1] = self.predictor.neighbor_y
