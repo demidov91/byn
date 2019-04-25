@@ -30,10 +30,10 @@ external_rate = sa.Table('external_rate', metadata,
                sa.Column('currency', sa.String(3), primary_key=True),
                sa.Column('timestamp', sa.Integer, primary_key=True),
                sa.Column('timestamp_close', sa.Integer),
-               sa.Column('open', sa.DECIMAL),
-               sa.Column('close', sa.DECIMAL),
-               sa.Column('low', sa.DECIMAL),
-               sa.Column('high', sa.DECIMAL),
+               sa.Column('open', sa.DECIMAL(12, 6)),
+               sa.Column('close', sa.DECIMAL(12, 6)),
+               sa.Column('low', sa.DECIMAL(12, 6)),
+               sa.Column('high', sa.DECIMAL(12, 6)),
                sa.Column('volume', sa.SMALLINT),
                )
 
@@ -42,7 +42,7 @@ external_rate_live = sa.Table('external_rate_live', metadata,
                sa.Column('timestamp', sa.Integer, primary_key=True),
                sa.Column('volume', sa.SMALLINT, primary_key=True),
                sa.Column('timestamp_received', sa.INTEGER),
-               sa.Column('rate', sa.DECIMAL),
+               sa.Column('rate', sa.DECIMAL(12, 6)),
                )
 
 
@@ -50,18 +50,18 @@ bcse = sa.Table('bcse', metadata,
                sa.Column('currency', sa.String(3), primary_key=True),
                sa.Column('timestamp', sa.Integer, primary_key=True),
                sa.Column('timestamp_received', sa.INTEGER),
-               sa.Column('rate', sa.DECIMAL),
+               sa.Column('rate', sa.DECIMAL(12, 6)),
                )
 
 nbrb = sa.Table('nbrb', metadata,
                sa.Column('kind', sa.String(15), primary_key=True),
                sa.Column('date', sa.DATE, primary_key=True),
-               sa.Column('usd', sa.DECIMAL),
-               sa.Column('eur', sa.DECIMAL),
-               sa.Column('rub', sa.DECIMAL),
-               sa.Column('uah', sa.DECIMAL),
-               sa.Column('byn', sa.DECIMAL),
-               sa.Column('dxy', sa.DECIMAL),
+               sa.Column('usd', sa.DECIMAL(31, 26)),
+               sa.Column('eur', sa.DECIMAL(31, 26)),
+               sa.Column('rub', sa.DECIMAL(31, 26)),
+               sa.Column('uah', sa.DECIMAL(31, 26)),
+               sa.Column('byn', sa.DECIMAL(31, 26)),
+               sa.Column('dxy', sa.DECIMAL(31, 26)),
                )
 
 prediction = sa.Table('prediction', metadata,
@@ -74,18 +74,18 @@ prediction = sa.Table('prediction', metadata,
 
 trade_date = sa.Table('trade_date', metadata,
                sa.Column('date', sa.DATE, primary_key=True),
-               sa.Column('predicted', sa.DECIMAL),
-               sa.Column('prediction_error', sa.DECIMAL),
-               sa.Column('accumulated_error', sa.DECIMAL),
+               sa.Column('predicted', sa.DECIMAL(31, 26)),
+               sa.Column('prediction_error', sa.DECIMAL(31, 26)),
+               sa.Column('accumulated_error', sa.DECIMAL(31, 26)),
                )
 
 rolling_average = sa.Table('rolling_average', metadata,
                    sa.Column('date', sa.DATE, primary_key=True),
                    sa.Column('duration', sa.SMALLINT, primary_key=True),
-                   sa.Column('eur', sa.DECIMAL),
-                   sa.Column('rub', sa.DECIMAL),
-                   sa.Column('uah', sa.DECIMAL),
-                   sa.Column('dxy', sa.DECIMAL),
+                   sa.Column('eur', sa.DECIMAL(31, 26)),
+                   sa.Column('rub', sa.DECIMAL(31, 26)),
+                   sa.Column('uah', sa.DECIMAL(31, 26)),
+                   sa.Column('dxy', sa.DECIMAL(31, 26)),
                )
 
 
@@ -99,9 +99,6 @@ DB_DATA = {
     'host': os.environ["POSTGRES_HOST"],
     'port': os.environ["POSTGRES_PORT"],
 }
-
-# Very debug mode...
-print(DB_DATA)
 
 
 async def init_pool():
