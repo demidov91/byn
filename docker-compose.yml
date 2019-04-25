@@ -43,6 +43,7 @@ services:
       - ${HOST_FLOWER_PORT}:5555
     volumes:
       - ./byn/:/byn/:ro
+      - ./mount/dump:/tmp/dump
     environment:
       - CELERY_BROKER_URL=redis://redis
       - CELERY_RESULT_BACKEND=redis://redis

@@ -1,12 +1,15 @@
+import asyncio
 import csv
 import datetime
 import gzip
 import os
+import shutil
 from typing import Tuple
 
 from celery import group
 
 from byn.tasks.launch import app
+from byn.postgres_db import metadata, connection
 # To activate logging:
 import byn.logging
 
@@ -59,12 +62,12 @@ def _create_cassandra_table_backup(table: str, columns: Tuple[str]):
 
 
 @app.task
-def _send_table_backup_to_s3(table: str):
+def _send_table_backup_to_s3(folder: str, table: str):
     import boto3
 
     s3 = boto3.client('s3')
     s3.upload_file(
-        f'/tmp/{table}.csv.gz',
+        os.path.join(folder, table + '.csv.gz'),
         os.environ['BACKUP_BUCKET'],
         f'{table}_{datetime.date.today():%Y-%m-%d}.csv.gz'
     )
@@ -128,3 +131,27 @@ def _create_hbase_table_backup(table_name: str, columns: Tuple[str]):
             writer.writerows(data)
 
 
+PSQL_FOLDER = '/tmp/dump/'
+
+
+async def dump_table(table_name: str):
+    os.makedirs(PSQL_FOLDER, exist_ok=True)
+    os.chmod(PSQL_FOLDER, 0o777)
+    path = os.path.join(PSQL_FOLDER, f'{table_name}.csv')
+
+    async with connection() as conn:
+        await conn.execute(f"COPY {table_name} TO %s DELIMITER ';' CSV HEADER", path)
+
+    with open(path, mode='rb') as orig, gzip.open(path + '.gz', mode='wb') as dest:
+        shutil.copyfileobj(orig, dest)
+
+    os.remove(path)
+
+@app.task
+def postgresql_backup():
+    async def _implemenation():
+        await asyncio.gather(*[dump_table(x) for x in metadata.tables.keys()])
+        for table_name in metadata.tables.keys():
+            _send_table_backup_to_s3.delay(PSQL_FOLDER, table_name)
+
+    asyncio.run(_implemenation())
