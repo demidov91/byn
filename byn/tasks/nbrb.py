@@ -9,6 +9,7 @@ import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
+from enum import Enum
 from typing import Dict, List, Tuple, Iterable, Sequence, Coroutine
 
 import numpy as np
@@ -63,8 +64,17 @@ class NoNewNbrbRateError(ValueError):
     pass
 
 
+class NotifyAction(Enum):
+    REBUILD = 0
+    MARK_DONE = 1
+
+
+
 @app.task
-def update_nbrb_rates_async(need_last_date=True):
+def update_nbrb_rates_async(
+        need_last_date=True,
+        notify_action: NotifyAction=NotifyAction.REBUILD
+):
     return (
         load_trade_dates.si() |
         extract_nbrb.s(need_last_date=need_last_date) |
@@ -78,7 +88,7 @@ def update_nbrb_rates_async(need_last_date=True):
             load_rolling_average.si(),
             daily_predict.si(),
         ) |
-        notify_predictor.si()
+        notify.si(notify_action)
     )()
 
 
@@ -294,17 +304,14 @@ def load_rolling_average():
 
 
 @app.task
-def notify_predictor():
+def notify(notify_action: NotifyAction):
     async def _notify_predictor():
         redis = await create_redis()
-        await mark_as_ready(NBRB)
-        await send_predictor_command(redis, PredictCommand.REBUILD)
+        if notify_action == NotifyAction.REBUILD:
+            await send_predictor_command(redis, PredictCommand.REBUILD)
+        elif notify_action == NotifyAction.MARK_DONE:
+            await mark_as_ready(NBRB)
+        else:
+            raise ValueError(notify_action)
 
     asyncio.run(_notify_predictor())
-
-
-def nbrb_file_to_cassandra():
-    with open(const.CLEAN_NBRB_DATA, mode='rt') as f:
-        data = json.load(f)
-
-    load_nbrb(data)
