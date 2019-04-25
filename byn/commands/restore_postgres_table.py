@@ -2,10 +2,14 @@ import asyncio
 import gzip
 import sys
 import shutil
+import logging
 import os
 import csv
 
 from byn.postgres_db import connection
+
+
+logger = logging.getLogger(__name__)
 
 
 async def run(table_name: str, path: str, cleanup=False):
@@ -22,8 +26,16 @@ async def run(table_name: str, path: str, cleanup=False):
     with open(path, mode='rt', newline='') as f:
         headers = next(csv.reader(f, delimiter=';'))
 
+    logger.info('Start restoring %s', table_name)
+
     async with connection() as conn:
-        await conn.execute(f"COPY {table_name}({', '.join(headers)}) from %s DELIMITER ';' CSV HEADER", path)
+        await conn.execute(
+            f"COPY {table_name}({', '.join(headers)}) from %s DELIMITER ';' CSV HEADER",
+            path,
+            timeout=5 * 60
+        )
+
+    logger.info('Table %s is restored.', table_name)
 
     if cleanup:
         os.remove(path)

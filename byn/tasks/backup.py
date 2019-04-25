@@ -139,8 +139,12 @@ async def dump_table(table_name: str):
     os.chmod(PSQL_FOLDER, 0o777)
     path = os.path.join(PSQL_FOLDER, f'{table_name}.csv')
 
+    logger.info('Start dumping %s', table_name)
+
     async with connection() as conn:
         await conn.execute(f"COPY {table_name} TO %s DELIMITER ';' CSV HEADER", path)
+
+    logger.info('Table %s is copied.', table_name)
 
     with open(path, mode='rb') as orig, gzip.open(path + '.gz', mode='wb') as dest:
         shutil.copyfileobj(orig, dest)
