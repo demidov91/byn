@@ -3,6 +3,7 @@ import os
 import sys
 
 from byn.commands.restore_postgres_table import run as restore_table
+import byn.logging
 
 
 async def run(path):
