@@ -286,7 +286,7 @@ def load_rolling_average():
     async def _run_mass_insert(chunk: List[Coroutine]):
         await asyncio.gather(*chunk)
 
-    for i in range(len(mass_insert), 10):
+    for i in range(0, len(mass_insert), 10):
         asyncio.run(_run_mass_insert(mass_insert[i:i+10]))
 
 

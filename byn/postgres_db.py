@@ -1,8 +1,10 @@
 import datetime
+import json
 import logging
 import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from decimal import Decimal
 from enum import Enum
 from typing import Collection, Dict, Iterable, Iterator, Optional, Sequence, Tuple
@@ -15,6 +17,7 @@ from sqlalchemy.dialects.postgresql import insert as psql_insert
 from byn.datatypes import BcseData, ExternalRateData
 from byn.predict.predictor import PredictionRecord
 from byn.utils import (
+    DecimalAwareEncoder,
     anext,
     atuple,
 )
@@ -198,7 +201,7 @@ async def get_rolling_average_lte(date: datetime.date) -> Tuple:
     async with connection() as cur:
         return await atuple(cur.execute(
             rolling_average.select(rolling_average.c.date <= date)
-            .order_by(rolling_average.c.date)
+            .order_by(rolling_average.c.date, rolling_average.c.duration)
         ))
 
 
@@ -340,7 +343,7 @@ async def get_the_last_external_rates(currencies: Iterable[str], end_dt: datetim
                     (external_rate.c.timestamp <= end_dt) &
                     (external_rate.c.currency == currency)
                 )
-                    .order_by(external_rate.c.timestamp)
+                    .order_by(sa.desc(external_rate.c.timestamp))
                     .limit(1)
             ), None)
 
@@ -541,10 +544,10 @@ async def insert_prediction(
     async with connection() as cur:
         await cur.execute(prediction.insert().values(
             timestamp=timestamp,
-            external_rates=external_rates,
-            bcse_full=bcse_full,
-            bcse_trusted_global=bcse_trusted_global,
-            prediction=prediction_record,
+            external_rates=json.dumps(external_rates, cls=DecimalAwareEncoder),
+            bcse_full=json.dumps(bcse_full, cls=DecimalAwareEncoder),
+            bcse_trusted_global=json.dumps(bcse_trusted_global, cls=DecimalAwareEncoder),
+            prediction=json.dumps(asdict(prediction_record), cls=DecimalAwareEncoder),
         ))
 
 

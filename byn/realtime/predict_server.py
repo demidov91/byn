@@ -47,7 +47,7 @@ async def run():
         if predictor.meta.last_date < today:
             start_dt = datetime.datetime.fromordinal(today.toordinal())
             bcse_data = np.array(
-                await atuple(get_bcse_in('USD', start_dt=start_dt)),
+                await get_bcse_in('USD', start_dt=start_dt),
                 dtype=np.dtype(object)
             )
 
