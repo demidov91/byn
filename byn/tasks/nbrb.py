@@ -29,9 +29,10 @@ from byn.postgres_db import (
     insert_trade_dates,
     insert_rolling_average,
     insert_dxy_12MSK,
+    LAST_ROLLING_AVERAGE_MAGIC_DATE,
     NbrbKind,
 )
-from byn.utils import create_redis, atuple
+from byn.utils import create_redis
 from byn.realtime.synchronization import (
     NBRB,
     mark_as_ready,
@@ -246,6 +247,7 @@ def load_rolling_average():
     nbrb_rows = asyncio.run(get_nbrb_gt(None, kind=NbrbKind.GLOBAL))
 
     dates = [x.date for x in nbrb_rows]
+    dates.append(LAST_ROLLING_AVERAGE_MAGIC_DATE)
     rates = np.array([(
         x.eur,
         x.rub,
@@ -260,16 +262,16 @@ def load_rolling_average():
 
     rolling_averages = {}
 
-    for i in range(start_index, len(rates)):
+    for i in range(start_index, len(rates) + 1):
         per_duration = {x: [] for x in const.ROLLING_AVERAGE_DURATIONS}
         rolling_averages[dates[i]] = per_duration
         for duration in const.ROLLING_AVERAGE_DURATIONS:
-            if i + 1 < duration:
+            if i < duration:
                 continue
 
             for data_column in range(4):
                 per_duration[duration].append(
-                    Decimal(np.mean(rates[i - duration + 1:i+1, data_column]))
+                    Decimal(np.mean(rates[i - duration:i, data_column]))
                 )
 
     mass_insert = []

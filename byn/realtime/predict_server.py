@@ -10,7 +10,7 @@ from decimal import Decimal
 import numpy as np
 
 from byn.utils import always_on_coroutine, create_redis, atuple
-from byn.predict_utils import build_predictor
+from byn.predict_utils import build_predictor, get_magic_rolling_average_as_array
 from byn.predict.predictor import Predictor
 from byn.predict.utils import build_trust_array
 from byn.datatypes import LocalRates, PredictCommand
@@ -39,7 +39,7 @@ async def run():
         logger.debug('Creating predictor...')
 
         predictor = await build_predictor(today, use_rolling=True)
-        rolling_average = predictor.meta.last_rolling_average
+        rolling_average = await get_magic_rolling_average_as_array(predictor.pre_processor)
         todays_bcse_config = TodaysRatesConfigurer(predictor=predictor, bcse_converter=bcse_converter)
 
         logger.debug('Predictor is created.')

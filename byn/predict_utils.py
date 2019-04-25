@@ -18,6 +18,7 @@ from byn.postgres_db import (
     get_nbrb_lte,
     get_rolling_average_lte,
     get_nbrb_rate,
+    get_magic_rolling_average,
 )
 
 
@@ -49,9 +50,7 @@ async def _get_full_X_Y(date: datetime.date) -> Tuple[np.ndarray, np.ndarray, Tu
     rolling_averages_as_dict = defaultdict(dict)
 
     for row in await get_rolling_average_lte(date):
-        rolling_averages_as_dict[row.date][row.duration] = [
-            row[column] for column in EXTERNAL_RATES_COLUMNS
-        ]
+        rolling_averages_as_dict[row.date][row.duration] = _rolling_row_to_X_part(row)
 
     for today in rates_as_dict:
         todays_X = np.full(X_LENGTH, None)
@@ -117,7 +116,6 @@ async def build_predictor(date: datetime.date, *, use_rolling=True) -> Predictor
         predictor._rebuild_ridge_model(cache_key=f'{_cache_prefix}_{date:%Y-%m-%d}')
 
     predictor.meta.last_date = dates[-1]
-    predictor.meta.last_rolling_average = x[-1][3:]
 
     return predictor
 
@@ -147,3 +145,15 @@ async def build_and_predict_linear(date: datetime.date) -> float:
     logger.debug('x: %s', x)
 
     return predictor._ridge_predict_with_one_model(x, weight=RidgeWeight.LINEAR)
+
+
+def _rolling_row_to_X_part(row):
+    return [row[column] for column in EXTERNAL_RATES_COLUMNS]
+
+
+async def get_magic_rolling_average_as_array(pre_processor: GlobalToNormlizedDataProcessor):
+    rolling = [0, 0, 0]
+    for row in await get_magic_rolling_average():
+        rolling.extend(_rolling_row_to_X_part(row))
+
+    return pre_processor.transform_global_vectorized([rolling])[0][3:]

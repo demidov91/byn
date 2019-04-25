@@ -89,6 +89,9 @@ rolling_average = sa.Table('rolling_average', metadata,
                )
 
 
+LAST_ROLLING_AVERAGE_MAGIC_DATE = datetime.date(2100, 1, 1)
+
+
 DB_DATA = {
     'user': 'postgres',
     'password': os.environ["POSTGRES_PASSWORD"],
@@ -192,16 +195,30 @@ async def get_last_external_currency_datetime(currency: str) -> datetime.datetim
 async def get_last_rolling_average_date() -> Optional[datetime.date]:
     async with connection() as cur:
         row = await anext(cur.execute(
-            rolling_average.select().order_by(sa.desc(rolling_average.c.date)).limit(1)
+            rolling_average.select(
+                rolling_average.c.date < LAST_ROLLING_AVERAGE_MAGIC_DATE
+            ).order_by(sa.desc(rolling_average.c.date)).limit(1)
         ), None)
 
     return row and row.date
 
 async def get_rolling_average_lte(date: datetime.date) -> Tuple:
+    if date >= LAST_ROLLING_AVERAGE_MAGIC_DATE:
+        raise ValueError(date)
+
     async with connection() as cur:
         return await atuple(cur.execute(
             rolling_average.select(rolling_average.c.date <= date)
             .order_by(rolling_average.c.date, rolling_average.c.duration)
+        ))
+
+
+async def get_magic_rolling_average():
+    async with connection() as conn:
+        return await atuple(conn.execute(
+            rolling_average
+            .select(rolling_average.c.date == LAST_ROLLING_AVERAGE_MAGIC_DATE)
+            .order_by(rolling_average.c.duration)
         ))
 
 
@@ -552,12 +569,19 @@ async def insert_prediction(
 
 
 async def insert_rolling_average(date: datetime.date, duration: int, data: Sequence[Decimal]):
+    data = dict(
+        date=date,
+        duration=duration,
+        eur=data[0],
+        rub=data[1],
+        uah=data[2],
+        dxy=data[3],
+    )
+
     async with connection() as cur:
-        await cur.execute(rolling_average.insert().values(
-            date=date,
-            duration=duration,
-            eur=data[0],
-            rub=data[1],
-            uah=data[2],
-            dxy=data[3],
-        ))
+        await cur.execute(
+            psql_insert(rolling_average, data).on_conflict_do_update(
+                index_elements=['date', 'duration'],
+                set_=data
+            )
+        )
