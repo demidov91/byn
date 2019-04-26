@@ -263,14 +263,16 @@ async def get_bcse_in(
     end_dt = end_dt.timestamp()
 
     async with connection() as cur:
-        return await atuple(cur.execute(
+        return [
+            x.as_tuple() async for x in cur.execute(
             sa.select([bcse.c.timestamp, bcse.c.rate])
             .select_from(bcse)
             .where(
                 (bcse.c.currency == currency) &
                 (bcse.c.timestamp >= start_dt) &
                 (bcse.c.timestamp < end_dt))
-        ))
+            )
+        ]
 
 
 async def get_external_rate_live(start_dt: datetime.datetime,
@@ -387,7 +389,7 @@ async def get_latest_external_rates(
             external_rate.select(external_rate.c.timestamp >= start_dt.timestamp())
                 .order_by(external_rate.c.timestamp)
         ):
-            currency_to_rows[row.currency].apend(_parse_external_rate_row(row))
+            currency_to_rows[row.currency].append(_parse_external_rate_row(row))
 
     return {
         currency: _external_rate_data_into_pairs(currency_to_rows[currency])
@@ -522,7 +524,7 @@ async def insert_external_rate_live(row: ExternalRateData):
         )
 
 
-async def insert_bcse(data: Iterable[BcseData], **kwargs):
+async def insert_bcse(data: Iterable[BcseData]):
     values = [{
         'currency': x.currency,
         'timestamp': x.timestamp_operation,
@@ -534,7 +536,9 @@ async def insert_bcse(data: Iterable[BcseData], **kwargs):
         return
 
     async with connection() as cur:
-        await cur.execute(bcse.insert().values(values))
+        await cur.execute(
+            psql_insert(bcse, values).on_conflict_do_nothing()
+        )
 
 
 def _ndarray_to_tuple_of_tuples(numpy_array):
