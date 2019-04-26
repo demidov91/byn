@@ -5,7 +5,7 @@ Periodical: once a day.
 """
 import asyncio
 import datetime
-import json
+import simplejson
 
 from celery import group
 
@@ -39,13 +39,13 @@ def extract_one_currency(start_dt: datetime.datetime, currency: str):
         last_time = datetime.datetime.fromtimestamp(data[0][0])
 
     with open(const.EXTERNAL_RATE_DATA % currency, mode='wt') as f:
-        json.dump(data_to_store, f)
+        simplejson.dump(data_to_store, f)
 
 
 @app.task(autoretry_for=(Exception, ), retry_backoff=True)
 def load_one_currency(currency: str):
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
-        data = json.load(f, parse_float=str)
+        data = simplejson.load(f, parse_float=str)
 
     asyncio.run(insert_external_rates(currency, data))
 
@@ -69,10 +69,10 @@ def extend_dump_by_forexpf_file(currency, file_path):
     Helper method to create an initial dump.
     """
     with open(const.EXTERNAL_RATE_DATA % currency, mode='rt') as f:
-        existing_data = json.load(f)
+        existing_data = simplejson.load(f)
 
     with open(file_path, mode='rt') as f:
-        raw_new_data = json.load(f)
+        raw_new_data = simplejson.load(f)
 
     last_timestamp = min((x[0] for x in existing_data), default=10**10)
 
@@ -84,4 +84,4 @@ def extend_dump_by_forexpf_file(currency, file_path):
     existing_data.extend(new_data)
 
     with open(const.EXTERNAL_RATE_DATA % currency, mode='wt') as f:
-        json.dump(existing_data, f)
+        simplejson.dump(existing_data, f)

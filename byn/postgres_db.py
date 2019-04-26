@@ -1,5 +1,5 @@
 import datetime
-import json
+import simplejson
 import logging
 import os
 from collections import defaultdict
@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import insert as psql_insert
 from byn.datatypes import BcseData, ExternalRateData
 from byn.predict.predictor import PredictionRecord
 from byn.utils import (
-    DecimalAwareEncoder,
+    EnumAwareEncoder,
     anext,
     atuple,
 )
@@ -562,10 +562,10 @@ async def insert_prediction(
     async with connection() as cur:
         await cur.execute(prediction.insert().values(
             timestamp=timestamp,
-            external_rates=json.dumps(external_rates, cls=DecimalAwareEncoder),
-            bcse_full=json.dumps(bcse_full, cls=DecimalAwareEncoder),
-            bcse_trusted_global=json.dumps(bcse_trusted_global, cls=DecimalAwareEncoder),
-            prediction=json.dumps(asdict(prediction_record), cls=DecimalAwareEncoder),
+            external_rates=simplejson.dumps(external_rates, cls=EnumAwareEncoder),
+            bcse_full=simplejson.dumps(bcse_full, cls=EnumAwareEncoder),
+            bcse_trusted_global=simplejson.dumps(bcse_trusted_global, cls=EnumAwareEncoder),
+            prediction=simplejson.dumps(asdict(prediction_record), cls=EnumAwareEncoder),
         ))
 
 

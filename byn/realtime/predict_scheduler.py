@@ -4,7 +4,7 @@
 import asyncio
 import dataclasses
 import datetime
-import json
+import simplejson
 import logging
 
 from byn import constants as const
@@ -12,7 +12,7 @@ from byn.postgres_db import (
     get_the_last_external_rates,
 )
 from byn.datatypes import LocalRates
-from byn.utils import create_redis, always_on_coroutine, DecimalAwareEncoder
+from byn.utils import create_redis, always_on_coroutine, EnumAwareEncoder
 from byn.realtime.synchronization import (
     predict_with_timeout,
     wait_for_any_data_thread,
@@ -55,10 +55,10 @@ async def predict_scheduler():
         output_data = await predict_with_timeout(redis, input_data, timeout=0.5)
         if output_data is not None:
             
-            await redis.publish(const.PUBLISH_PREDICT_REDIS_CHANNEL, json.dumps({
+            await redis.publish(const.PUBLISH_PREDICT_REDIS_CHANNEL, simplejson.dumps({
                 'external': dataclasses.asdict(input_data),
                 'predicted': dataclasses.asdict(output_data.to_local()),
-            }, cls=DecimalAwareEncoder))
+            }, cls=EnumAwareEncoder))
 
         await asyncio.sleep(const.PREDICT_UPDATE_INTERVAL)
 

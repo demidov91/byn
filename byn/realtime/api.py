@@ -2,9 +2,8 @@
 register clients' websockets
 """
 import asyncio
-import json
+import simplejson
 import logging
-from decimal import Decimal
 from functools import partial
 
 import aiohttp
@@ -12,7 +11,7 @@ from aiohttp import web
 from aiohttp import WSCloseCode
 
 import byn.constants as const
-from byn.utils import create_redis, always_on_coroutine, DecimalAwareEncoder
+from byn.utils import create_redis, always_on_coroutine, EnumAwareEncoder
 
 
 logger = logging.getLogger(__name__)
@@ -61,13 +60,13 @@ async def _subscribe_for_predictions(app):
 
     while True:
         raw_message = await channel.get()
-        message = json.loads(raw_message, parse_float=Decimal)
+        message = simplejson.loads(raw_message, use_decimal=True)
         logger.debug(message)
 
         message['type'] = 'prediction'
 
         for ws in app['websockets']:
             asyncio.create_task(
-                ws.send_json(message, dumps=partial(json.dumps, cls=DecimalAwareEncoder))
+                ws.send_json(message, dumps=partial(simplejson.dumps, cls=EnumAwareEncoder))
             )
 

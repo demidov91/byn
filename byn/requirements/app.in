@@ -15,3 +15,6 @@ aiohttp
 
 # Issue tracking.
 sentry-sdk
+
+# Work with decimals in json.
+simplejson

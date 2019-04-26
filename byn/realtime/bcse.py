@@ -4,7 +4,7 @@ There is no live api for bcse, so let's try to read it periodically. Once per 15
 """
 import asyncio
 import datetime
-import json
+import simplejson
 import logging
 from collections import OrderedDict
 from typing import List, Optional, Sequence
@@ -155,7 +155,7 @@ async def _extract_bcse_rates(client: ClientSession, date: datetime.date) -> Opt
         return None
 
     raw_data = await response.read()
-    raw_data = json.loads(raw_data.decode(), parse_float=str)
+    raw_data = simplejson.loads(raw_data.decode(), parse_float=str)
     required_raw_data_item = next(
         filter(lambda x: x['color'] == const.BCSE_LAST_OPERATION_COLOR, raw_data),
         None

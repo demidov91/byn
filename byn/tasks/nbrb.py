@@ -5,7 +5,6 @@ Periodical: once a day.
 """
 import asyncio
 import datetime
-import json
 import logging
 from collections import defaultdict
 from decimal import Decimal
