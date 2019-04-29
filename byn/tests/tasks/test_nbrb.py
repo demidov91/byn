@@ -1,10 +1,16 @@
 from decimal import Decimal
 from unittest import mock
 
+from byn.postgres_db import NbrbKind
 from byn.tasks import nbrb
 
 
-@mock.patch('byn.tasks.nbrb.insert_nbrb')
+class AsyncMock(mock.MagicMock):
+    async def __call__(self, *args, **kwargs):
+        return super(AsyncMock, self).__call__(*args, **kwargs)
+
+
+@mock.patch('byn.tasks.nbrb.insert_nbrb', new_callable=AsyncMock)
 def test_load_nbrb(patched):
     source = [
         {"Date": "2015-11-02", "cur": "USD", "rate": "1.7421"},
@@ -34,4 +40,4 @@ def test_load_nbrb(patched):
             'RUB': Decimal('2.7314'),
             'UAH': Decimal('7.561'),
         },
-    ))
+    ), kind=NbrbKind.OFFICIAL)

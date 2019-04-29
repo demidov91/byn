@@ -12,7 +12,7 @@ from byn import constants as const
 from byn.postgres_db import insert_external_rate_live
 from byn.datatypes import ExternalRateData
 from byn.forexpf import sse_to_tuple, CURRENCY_CODES
-from byn.utils import always_on_coroutine, create_redis
+from byn.utils import always_on_coroutine, create_redis, once_per
 from byn.tasks.external_rates import build_task_update_all_currencies
 from byn.tasks.launch import app
 from byn.realtime.synchronization import mark_as_ready, EXTERNAL_LIVE, EXTERNAL_HISTORY
@@ -156,6 +156,7 @@ def _get_time_to_monday(current_dt: datetime.datetime) -> float:
     return (datetime.datetime.fromordinal(next_monday.toordinal()) - current_dt).total_seconds()
 
 
+@once_per(period=10)
 def _inspect_queue(queue: Queue):
     """
     Log queue size.

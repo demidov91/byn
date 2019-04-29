@@ -104,6 +104,27 @@ def always_on_sync(func=None, expected_exceptions=()):
     return wrapper
 
 
+def once_per(period: int=None):
+    if period is None:
+        raise ValueError(period)
+
+    def _real_decorator(func):
+        counter = 0
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            nonlocal counter
+            counter += 1
+
+            if counter >= period:
+                counter = 0
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return _real_decorator
+
+
 async def create_redis() -> aioredis.Redis:
     return await aioredis.create_redis(os.environ["REDIS_URL"], db=const.REDIS_CACHE_DB)
 
