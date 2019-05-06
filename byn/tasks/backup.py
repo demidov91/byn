@@ -151,11 +151,15 @@ async def dump_table(table_name: str):
 
     os.remove(path)
 
+
+async def dump_and_send_table(table_name: str):
+    await dump_table(table_name)
+    _send_table_backup_to_s3.delay(PSQL_FOLDER, table_name)
+
+
 @app.task
 def postgresql_backup():
     async def _implemenation():
-        await asyncio.gather(*[dump_table(x) for x in metadata.tables.keys()])
-        for table_name in metadata.tables.keys():
-            _send_table_backup_to_s3.delay(PSQL_FOLDER, table_name)
+        await asyncio.gather(*[dump_and_send_table(x) for x in metadata.tables.keys()])
 
     asyncio.run(_implemenation())
