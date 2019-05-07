@@ -146,7 +146,12 @@ def dump_table(table_name: str):
         logger.info('Start dumping %s', table_name)
 
         async with connection() as conn:
-            await conn.execute(f"COPY {table_name} TO PROGRAM 'gzip 1> {path} 2>{PSQL_FOLDER}{table_name}.log' DELIMITER ';' CSV HEADER")
+            await conn.execute(
+                f"COPY {table_name} TO PROGRAM "
+                f"'gzip 1> {path} 2>{PSQL_FOLDER}{table_name}.log'"
+                " DELIMITER ';' CSV HEADER",
+                timeout=5 * 60
+            )
 
         logger.info('%s dump is created.', table_name)
 
