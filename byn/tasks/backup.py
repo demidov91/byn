@@ -134,32 +134,26 @@ def _create_hbase_table_backup(table_name: str, columns: Tuple[str]):
 PSQL_FOLDER = '/tmp/dump/'
 
 
-async def dump_table(table_name: str):
-    os.makedirs(PSQL_FOLDER, exist_ok=True)
-    os.chmod(PSQL_FOLDER, 0o777)
-    path = os.path.join(PSQL_FOLDER, f'{table_name}.csv')
+@app.task
+def dump_table(table_name: str):
+    async def _implementation():
+        os.makedirs(PSQL_FOLDER, exist_ok=True)
+        os.chmod(PSQL_FOLDER, 0o777)
+        path = os.path.join(PSQL_FOLDER, f'{table_name}.csv.gz')
+        if os.path.exists(path):
+            os.remove(path)
+            
+        logger.info('Start dumping %s', table_name)
 
-    logger.info('Start dumping %s', table_name)
+        async with connection() as conn:
+            await conn.execute(f"COPY {table_name} TO PROGRAM 'gzip > {path}' DELIMITER ';' CSV HEADER")
 
-    async with connection() as conn:
-        await conn.execute(f"COPY {table_name} TO %s DELIMITER ';' CSV HEADER", path)
+        logger.info('%s dump is created.', table_name)
 
-    logger.info('Table %s is copied.', table_name)
-
-    with open(path, mode='rb') as orig, gzip.open(path + '.gz', mode='wb') as dest:
-        shutil.copyfileobj(orig, dest)
-
-    os.remove(path)
-
-
-async def dump_and_send_table(table_name: str):
-    await dump_table(table_name)
-    _send_table_backup_to_s3.delay(PSQL_FOLDER, table_name)
+    asyncio.run(_implementation())
 
 
 @app.task
 def postgresql_backup():
-    async def _implemenation():
-        await asyncio.gather(*[dump_and_send_table(x) for x in metadata.tables.keys()])
-
-    asyncio.run(_implemenation())
+    for table_name in metadata.tables.keys():
+        (dump_table.si(table_name) | _send_table_backup_to_s3.si(PSQL_FOLDER, table_name))()
