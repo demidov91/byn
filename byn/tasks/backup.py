@@ -3,13 +3,12 @@ import csv
 import datetime
 import gzip
 import os
-import shutil
 from typing import Tuple
 
 from celery import group
 
 from byn.tasks.launch import app
-from byn.postgres_db import metadata, connection
+from byn.postgres_db import metadata, connection, create_connection
 # To activate logging:
 import byn.logging
 
@@ -145,13 +144,13 @@ def dump_table(table_name: str):
             
         logger.info('Start dumping %s', table_name)
 
-        async with connection() as conn:
-            await conn.execute(
-                f"COPY {table_name} TO PROGRAM "
-                f"'gzip 1> {path} 2>{PSQL_FOLDER}{table_name}.log'"
-                " DELIMITER ';' CSV HEADER",
-                timeout=5 * 60
-            )
+        async with create_connection(timeout=5*60) as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    f"COPY {table_name} TO PROGRAM "
+                    f"'gzip 1>{path} 2>{PSQL_FOLDER}{table_name}.log'"
+                    " DELIMITER ';' CSV HEADER",
+                )
 
         logger.info('%s dump is created.', table_name)
 

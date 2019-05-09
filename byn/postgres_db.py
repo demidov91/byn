@@ -13,6 +13,7 @@ import aiopg
 import aiopg.sa
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as psql_insert
+from aiopg.connection import _ContextManager
 
 from byn.datatypes import BcseData, ExternalRateData
 from byn.predict.predictor import PredictionRecord
@@ -101,13 +102,13 @@ DB_DATA = {
 }
 
 
+def _build_dsn():
+    return 'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**DB_DATA)
+
+
 async def init_pool():
     try:
-        metadata.create_all(
-            sa.create_engine(
-                'postgresql://{user}:{password}@{host}:{port}/{database}'.format(**DB_DATA)
-            )
-        )
+        metadata.create_all(sa.create_engine(_build_dsn()))
     except:
         logger.exception("Can't initialize db.")
         return None
@@ -129,6 +130,10 @@ async def get_engine():
         engine = await init_pool()
         local_engine.set(engine)
     return engine
+
+
+def create_connection(timeout: float=60) -> _ContextManager:
+    return aiopg.connect(_build_dsn(), timeout=timeout)
 
 
 @asynccontextmanager

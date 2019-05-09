@@ -31,8 +31,7 @@ async def run(table_name: str, path: str, cleanup=False):
     async with connection() as conn:
         await conn.execute(
             f"COPY {table_name}({', '.join(headers)}) from %s DELIMITER ';' CSV HEADER",
-            path,
-            timeout=5 * 60
+            path
         )
 
     logger.info('Table %s is restored.', table_name)
