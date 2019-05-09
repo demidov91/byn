@@ -1,5 +1,5 @@
 """
-profinance.ru (forexpf) long poll ===> redis cache & cassandra
+profinance.ru (forexpf) long poll ===> redis cache & db
 """
 import asyncio
 import logging
