@@ -5,28 +5,60 @@
 #    pip-compile --output-file byn/requirements/app.txt byn/requirements/app.in
 #
 -e git+https://github.com/celery/celery@cd6c7444cadbdaaccca14a986e7e1b3330c33024#egg=celery
+    # via -r app.in
 aiohttp==3.5.4
+    # via -r app.in
 aiopg==0.16.0
+    # via -r app.in
 aioredis==1.2.0
-amqp==2.4.1               # via kombu
-async-timeout==3.0.1      # via aiohttp, aioredis
-attrs==18.2.0             # via aiohttp
+    # via -r app.in
+amqp==2.4.1
+    # via kombu
+async-timeout==3.0.1
+    # via
+    #   aiohttp
+    #   aioredis
+attrs==18.2.0
+    # via aiohttp
 billiard==3.5.0.5
-certifi==2018.11.29       # via sentry-sdk
-chardet==3.0.4            # via aiohttp
-hiredis==0.3.1            # via aioredis
-idna==2.8                 # via yarl
+    # via celery
+certifi==2022.12.7
+    # via sentry-sdk
+chardet==3.0.4
+    # via aiohttp
+hiredis==0.3.1
+    # via aioredis
+idna==2.8
+    # via yarl
 kombu==4.3.0
-multidict==4.5.2          # via aiohttp, yarl
-numpy==1.16.1             # via scikit-learn, scipy
-psycopg2-binary==2.8.2    # via aiopg
+    # via celery
+multidict==4.5.2
+    # via
+    #   aiohttp
+    #   yarl
+numpy==1.16.1
+    # via
+    #   scikit-learn
+    #   scipy
+psycopg2-binary==2.8.2
+    # via aiopg
 pytz==2018.9
+    # via celery
 redis==3.1.0
+    # via -r app.in
 scikit-learn==0.20.2
-scipy==1.2.1              # via scikit-learn
+    # via -r app.in
+scipy==1.2.1
+    # via scikit-learn
 sentry-sdk==0.7.6
+    # via -r app.in
 simplejson==3.16.0
+    # via -r app.in
 sqlalchemy==1.3.3
-urllib3==1.24.1           # via sentry-sdk
-vine==1.2.0               # via amqp
-yarl==1.3.0               # via aiohttp
+    # via -r app.in
+urllib3==1.24.1
+    # via sentry-sdk
+vine==1.2.0
+    # via amqp
+yarl==1.3.0
+    # via aiohttp
